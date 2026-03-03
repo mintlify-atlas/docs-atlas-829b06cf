@@ -1,0 +1,536 @@
+---
+title: Backend Services Architecture
+description: Service layer architecture, database models, and LLM integration patterns
+---
+
+## Architecture Overview
+
+LatentGEO's backend follows a **service-oriented architecture** with clear separation of concerns:
+
+```
+FastAPI Routes → Service Layer → Database Models
+                      ↓
+              External Integrations
+              (LLMs, APIs, Storage)
+```
+
+### Stack
+
+- **Framework**: FastAPI
+- **ORM**: SQLAlchemy
+- **Database**: PostgreSQL (Supabase)
+- **Task Queue**: Celery + Redis
+- **Storage**: Supabase Storage
+- **Real-time**: Server-Sent Events (SSE)
+
+## Service Layer
+
+Services contain business logic and are located in `backend/app/services/`:
+
+```python
+from sqlalchemy.orm import Session
+from app.models import Audit
+from app.schemas import AuditCreate
+
+class AuditService:
+    @staticmethod
+    def create_audit(db: Session, audit_create: AuditCreate) -> Audit:
+        """Create new audit with idempotency."""
+        # Business logic here
+        audit = Audit(**audit_create.dict())
+        db.add(audit)
+        db.commit()
+        db.refresh(audit)
+        return audit
+```
+
+<Info>
+Services are stateless and use dependency injection for database sessions.
+</Info>
+
+## Core Services
+
+### AuditService
+
+Manages audit lifecycle and orchestrates the analysis pipeline.
+
+**Key Methods:**
+
+<CodeGroup>
+```python Create Audit
+from app.services.audit_service import AuditService
+from app.schemas import AuditCreate
+
+audit_create = AuditCreate(
+    url="https://example.com",
+    user_email="user@example.com",
+    competitors=["competitor1.com", "competitor2.com"]
+)
+
+audit = AuditService.create_audit(db, audit_create)
+```
+
+```python Update Progress
+from app.models import AuditStatus
+
+AuditService.update_audit_progress(
+    db=db,
+    audit_id=audit_id,
+    progress=50,
+    status=AuditStatus.RUNNING
+)
+```
+
+```python Set Results
+await AuditService.set_audit_results(
+    db=db,
+    audit_id=audit_id,
+    target_audit=target_audit_data,
+    external_intelligence=intel_data,
+    competitor_audits=competitor_data,
+    report_markdown=report_text,
+    fix_plan=fix_plan_items
+)
+```
+</CodeGroup>
+
+**Features:**
+
+- Idempotency: Prevents duplicate audits for the same URL
+- Ownership validation: Ensures users can only access their audits
+- Progress tracking: Real-time updates via SSE
+- File persistence: Saves audit artifacts to Supabase Storage
+
+### PipelineService
+
+Orchestrates the complete audit pipeline.
+
+**Pipeline Stages:**
+
+<Steps>
+  <Step title="Local Audit">
+    Crawl target site and analyze structure, content, E-E-A-T, schema.
+  </Step>
+
+  <Step title="External Intelligence">
+    Use LLM to analyze competitive landscape and category.
+  </Step>
+
+  <Step title="Competitor Analysis">
+    Crawl and audit competitor sites.
+  </Step>
+
+  <Step title="Fix Plan Generation">
+    Generate prioritized recommendations.
+  </Step>
+
+  <Step title="Report Generation">
+    Create comprehensive markdown report using LLM.
+  </Step>
+</Steps>
+
+**Usage:**
+
+```python
+from app.services.pipeline_service import run_initial_audit
+
+result = await run_initial_audit(
+    url=audit_url,
+    target_audit=target_audit_data,
+    audit_id=audit_id,
+    llm_function=llm_function,
+    crawler_service=CrawlerService.crawl_site,
+    progress_callback=update_progress,
+    generate_report=False,  # Fast mode: skip heavy report
+    enable_llm_external_intel=True
+)
+```
+
+### ContentTemplateService
+
+Generates content templates optimized for GEO (Generative Engine Optimization).
+
+**Template Types:**
+
+- **Guide**: Step-by-step educational content
+- **Comparison**: Product/service comparisons
+- **FAQ**: Question-answer format
+- **Listicle**: Top N lists
+- **Tutorial**: How-to instructions
+
+**Example:**
+
+```python
+from app.services.content_template_service import ContentTemplateService
+
+template = ContentTemplateService.get_template("guide")
+print(template['structure'])  # Template sections
+print(template['llm_optimization'])  # GEO tips
+```
+
+<Check>
+Templates are optimized for LLM citation and visibility.
+</Check>
+
+### PageSpeedService
+
+Analyzes site performance using Google PageSpeed Insights API.
+
+```python
+from app.services.pagespeed_service import PageSpeedService
+
+pagespeed_data = await PageSpeedService.analyze_both_strategies(
+    url=audit_url,
+    api_key=settings.GOOGLE_PAGESPEED_API_KEY
+)
+
+# Returns data for mobile and desktop
+mobile_score = pagespeed_data['mobile']['lighthouseResult']['categories']['performance']['score']
+desktop_score = pagespeed_data['desktop']['lighthouseResult']['categories']['performance']['score']
+```
+
+### KeywordService
+
+Researches keywords and search volume.
+
+```python
+from app.services.keyword_service import KeywordService
+
+keyword_service = KeywordService(db)
+await keyword_service.research_keywords(
+    audit_id=audit_id,
+    domain=domain,
+    seed_keywords=["SEO audit", "site analysis"]
+)
+```
+
+### RankTrackerService
+
+Tracks search engine rankings.
+
+```python
+from app.services.rank_tracker_service import RankTrackerService
+
+rank_service = RankTrackerService(db)
+rankings = await rank_service.track_rankings(
+    audit_id=audit_id,
+    domain=domain,
+    keywords=["brand name", "product category"]
+)
+```
+
+### BacklinkService
+
+Analyzes backlink profile.
+
+```python
+from app.services.backlink_service import BacklinkService
+
+backlink_service = BacklinkService(db)
+backlinks = await backlink_service.analyze_backlinks(
+    audit_id=audit_id,
+    domain=domain
+)
+```
+
+### LLMVisibilityService
+
+Checks visibility in LLM responses (GEO).
+
+```python
+from app.services.llm_visibility_service import LLMVisibilityService
+
+visibility_service = LLMVisibilityService(db)
+visibility = await visibility_service.check_visibility(
+    audit_id=audit_id,
+    brand_name="YourBrand",
+    keywords=["industry topic", "product category"]
+)
+```
+
+## Database Models
+
+Models are defined in `backend/app/models/` using SQLAlchemy.
+
+### Audit Model
+
+```python
+from sqlalchemy import Column, Integer, String, Text, JSON, Enum
+from app.models.base import Base
+
+class Audit(Base):
+    __tablename__ = "audits"
+
+    id = Column(Integer, primary_key=True, index=True)
+    url = Column(String, nullable=False, index=True)
+    domain = Column(String, nullable=True, index=True)
+    status = Column(Enum(AuditStatus), default=AuditStatus.PENDING)
+    progress = Column(Integer, default=0)
+    
+    # Results
+    target_audit = Column(JSON)
+    external_intelligence = Column(JSON)
+    competitor_audits = Column(JSON)
+    report_markdown = Column(Text)
+    fix_plan = Column(JSON)
+    pagespeed_data = Column(JSON)
+    
+    # Ownership
+    user_id = Column(String, index=True)
+    user_email = Column(String, index=True)
+    
+    # Relationships
+    keywords = relationship("Keyword", back_populates="audit")
+    rank_trackings = relationship("RankTracking", back_populates="audit")
+    backlinks = relationship("Backlink", back_populates="audit")
+    llm_visibilities = relationship("LLMVisibility", back_populates="audit")
+```
+
+### AuditStatus Enum
+
+```python
+from enum import Enum
+
+class AuditStatus(str, Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+```
+
+### Relationships
+
+```python
+# One-to-Many
+audit.keywords  # List of Keyword objects
+audit.backlinks  # List of Backlink objects
+
+# Many-to-One
+keyword.audit  # Parent Audit object
+```
+
+## LLM Integration
+
+LatentGEO uses NVIDIA NIM for LLM capabilities.
+
+### LLM Factory
+
+```python
+from app.core.llm_kimi import get_llm_function
+
+llm_function = get_llm_function()
+
+# Call LLM
+response = await llm_function(
+    messages=[
+        {"role": "system", "content": "You are an SEO expert."},
+        {"role": "user", "content": "Analyze this site..."}
+    ],
+    temperature=0.3,
+    max_tokens=8000
+)
+
+result = response['choices'][0]['message']['content']
+```
+
+### Structured Output
+
+For JSON responses:
+
+```python
+import json
+
+system_prompt = """
+You are an SEO analyst. Return your analysis as valid JSON:
+{
+  "category": "E-commerce",
+  "strengths": ["Fast loading", "Good content"],
+  "weaknesses": ["Poor mobile UX", "Missing schema"]
+}
+"""
+
+response = await llm_function(
+    messages=[
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": audit_data}
+    ]
+)
+
+analysis = json.loads(response['choices'][0]['message']['content'])
+```
+
+<Warning>
+Always validate and sanitize LLM outputs before persisting to database.
+</Warning>
+
+### Retry Policy
+
+```python
+from tenacity import retry, stop_after_attempt, wait_exponential
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10)
+)
+async def call_llm_with_retry(llm_function, messages):
+    return await llm_function(messages=messages)
+```
+
+## External Integrations
+
+### Supabase Storage
+
+```python
+from app.services.supabase_service import SupabaseService
+
+# Upload file
+SupabaseService.upload_file(
+    bucket="audit-reports",
+    file_path=f"audits/{audit_id}/report.pdf",
+    file_data=pdf_bytes
+)
+
+# Get public URL
+url = SupabaseService.get_public_url(
+    bucket="audit-reports",
+    file_path=f"audits/{audit_id}/report.pdf"
+)
+```
+
+### Redis (Caching & SSE)
+
+```python
+from app.services.cache_service import cache
+
+# Set cache
+cache.set("audits_list_user@example.com", audits_data, ttl=300)
+
+# Get cache
+data = cache.get("audits_list_user@example.com")
+
+# Delete cache
+cache.delete("audits_list_user@example.com")
+```
+
+### SSE (Server-Sent Events)
+
+```python
+from app.services.sse_service import SSEService
+
+# Publish progress event
+SSEService.publish_progress(
+    audit_id=audit_id,
+    progress=75,
+    status="running",
+    message="Analyzing competitors..."
+)
+```
+
+## Error Handling
+
+### Service-Level Exceptions
+
+```python
+from fastapi import HTTPException
+
+class AuditService:
+    @staticmethod
+    def get_audit(db: Session, audit_id: int, user_email: str) -> Audit:
+        audit = db.query(Audit).filter(
+            Audit.id == audit_id,
+            Audit.user_email == user_email
+        ).first()
+        
+        if not audit:
+            raise HTTPException(
+                status_code=404,
+                detail="Audit not found or access denied"
+            )
+        
+        return audit
+```
+
+### Logging
+
+```python
+from app.core.logger import get_logger
+
+logger = get_logger(__name__)
+
+try:
+    result = await process_audit(audit_id)
+    logger.info(f"Audit {audit_id} processed successfully")
+except Exception as e:
+    logger.error(f"Error processing audit {audit_id}: {e}", exc_info=True)
+    raise
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use dependency injection">
+    Pass database sessions as parameters rather than creating them inside services.
+    
+    ```python
+    # Good
+    def create_audit(db: Session, data: AuditCreate) -> Audit:
+        pass
+    
+    # Bad
+    def create_audit(data: AuditCreate) -> Audit:
+        db = SessionLocal()  # Don't do this
+    ```
+  </Accordion>
+
+  <Accordion title="Keep services stateless">
+    Services should not maintain state between calls. Use the database for persistence.
+  </Accordion>
+
+  <Accordion title="Validate ownership">
+    Always verify that users can only access their own resources.
+    
+    ```python
+    audit = db.query(Audit).filter(
+        Audit.id == audit_id,
+        Audit.user_email == user_email  # ← Critical
+    ).first()
+    ```
+  </Accordion>
+
+  <Accordion title="Use transactions">
+    Wrap multi-step operations in transactions.
+    
+    ```python
+    try:
+        audit = Audit(...)
+        db.add(audit)
+        db.flush()  # Get audit.id
+        
+        # Create related records
+        keyword = Keyword(audit_id=audit.id, ...)
+        db.add(keyword)
+        
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Celery Workers" icon="gears" href="/development/celery-workers">
+    Learn about background task processing
+  </Card>
+  <Card title="Frontend Components" icon="react" href="/development/frontend-components">
+    Build UI that consumes these services
+  </Card>
+  <Card title="Testing" icon="flask" href="/development/testing">
+    Test service layer logic
+  </Card>
+  <Card title="Contributing" icon="code-branch" href="/development/contributing">
+    Contribute to backend services
+  </Card>
+</CardGroup>

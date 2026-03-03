@@ -1,0 +1,105 @@
+---
+title: Introduction
+description: Full-stack SaaS platform for SEO/GEO audits with real-time monitoring
+---
+
+<img
+  className="block dark:hidden"
+  src="/images/hero-light.svg"
+  alt="Hero Light"
+/>
+<img
+  className="hidden dark:block"
+  src="/images/hero-dark.svg"
+  alt="Hero Dark"
+/>
+
+## What is LatentGEO?
+
+LatentGEO is a powerful full-stack SaaS platform designed for comprehensive SEO and GEO audits. Built with modern technologies and real-time monitoring capabilities, LatentGEO helps you analyze, optimize, and track your website's search engine performance.
+
+<CardGroup cols={2}>
+  <Card
+    title="SEO/GEO Audits"
+    icon="magnifying-glass-chart"
+    href="#"
+  >
+    Comprehensive audits for search engine optimization and geographic optimization
+  </Card>
+  <Card
+    title="Real-time Monitoring"
+    icon="gauge-high"
+    href="#"
+  >
+    Live progress tracking with Server-Sent Events (SSE) for instant feedback
+  </Card>
+  <Card
+    title="Analytics Dashboard"
+    icon="chart-line"
+    href="#"
+  >
+    Monitor audit progress, analyzed pages, and competitor insights in real-time
+  </Card>
+  <Card
+    title="External Integrations"
+    icon="plug"
+    href="#"
+  >
+    Webhook support for seamless integration with external services
+  </Card>
+</CardGroup>
+
+## Key Features
+
+### Modern Tech Stack
+
+LatentGEO leverages industry-leading technologies to deliver a robust, scalable platform:
+
+- **Backend**: FastAPI + SQLAlchemy + Celery for high-performance API operations
+- **Frontend**: Next.js (App Router) for modern, fast user experiences
+- **Real-time**: Server-Sent Events (SSE) with Redis-first architecture and database fallback
+- **Infrastructure**: Supabase Postgres + Supabase Storage + Redis
+
+### Real-time Architecture
+
+LatentGEO implements a sophisticated real-time system that combines:
+
+- **SSE (Server-Sent Events)**: Live progress updates for audit dashboards with Redis as the primary source and intelligent database fallback
+- **Webhooks**: External integrations for incoming/outgoing automations
+- **Fallback Mechanisms**: Automatic polling fallback if SSE connections fail, ensuring uninterrupted user experience
+
+### Deployment Flexibility
+
+Two Docker Compose modes are supported for different use cases:
+
+1. **Standard Mode** (`docker-compose.yml`): Production-ready deployment with optimized frontend builds
+2. **Development Mode** (`docker-compose.dev.yml`): Hot reload for backend and frontend with code mounts for rapid development
+
+## Architecture Overview
+
+LatentGEO's architecture is designed for performance and reliability:
+
+- **Backend API**: Built with FastAPI, handling all business logic and data operations
+- **SSE System**: Real-time progress publishing from audit services through Redis streams
+- **Frontend Proxy**: Next.js API routes proxy SSE connections with authentication
+- **Worker Queue**: Celery workers process audit tasks asynchronously
+- **Storage**: Supabase for database and file storage (audit reports)
+
+## Get Started
+
+<CardGroup cols={2}>
+  <Card
+    title="Quick Start"
+    icon="rocket"
+    href="/quickstart"
+  >
+    Get LatentGEO up and running in minutes with Docker Compose
+  </Card>
+  <Card
+    title="Environment Setup"
+    icon="gear"
+    href="/environment-setup"
+  >
+    Configure environment variables for production or development
+  </Card>
+</CardGroup>

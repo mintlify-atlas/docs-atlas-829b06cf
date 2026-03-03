@@ -1,0 +1,815 @@
+---
+title: 'AWS Deployment'
+description: 'Deploy LatentGEO to AWS using ECS, RDS, ElastiCache, and CloudFront'
+---
+
+## Overview
+
+This guide walks through deploying LatentGEO to AWS in a production-ready configuration with:
+
+- **ECS (Fargate)** - Container orchestration
+- **RDS PostgreSQL** - Managed database (replacing Supabase)
+- **ElastiCache Redis** - Managed caching and queues
+- **Application Load Balancer** - Traffic distribution
+- **CloudFront** - CDN for frontend assets
+- **WAF** - Web Application Firewall
+- **Secrets Manager** - Credential management
+
+<Note>
+  This deployment follows the AWS Well-Architected Framework with multi-AZ redundancy, auto-scaling, and comprehensive monitoring.
+</Note>
+
+## Deployment Timeline
+
+The complete deployment process takes approximately **8 weeks** across 13 phases. Budget approximately **$300/month** for production infrastructure.
+
+## Prerequisites
+
+<Steps>
+  <Step title="AWS Account Setup">
+    - Create AWS account
+    - Enable MFA on root account
+    - Create IAM user for CI/CD with appropriate permissions
+    - Configure AWS CLI with credentials
+  </Step>
+  
+  <Step title="Generate Secure Secrets">
+    Generate all required secrets before deployment:
+    
+    ```bash
+    # SECRET_KEY
+    python -c "import secrets; print(secrets.token_urlsafe(32))"
+    
+    # ENCRYPTION_KEY
+    python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    
+    # Database password
+    python -c "import secrets; print(secrets.token_urlsafe(24))"
+    ```
+  </Step>
+  
+  <Step title="Domain Registration">
+    - Register domain (Route53 or external registrar)
+    - Create hosted zone in Route53
+    - Request SSL certificate in ACM
+    - Validate certificate via DNS or email
+  </Step>
+  
+  <Step title="Pre-deployment Validation">
+    Run the release gate checks:
+    
+    ```bash
+    # Frontend checks
+    pnpm --dir frontend lint
+    pnpm --dir frontend run format:check
+    pnpm --dir frontend run type-check
+    pnpm --dir frontend test:ci
+    STRICT_BUILD=1 pnpm --dir frontend build
+    
+    # Backend checks
+    python -m ruff check backend/app
+    python -m mypy backend/app --ignore-missing-imports
+    python -m bandit -r backend/app -q
+    pytest -q backend/tests -m "not integration and not live"
+    ```
+  </Step>
+</Steps>
+
+## Infrastructure Setup
+
+### Phase 1: VPC and Networking
+
+<Steps>
+  <Step title="Create VPC">
+    Create a VPC with CIDR block `10.0.0.0/16`:
+    
+    ```bash
+    aws ec2 create-vpc \
+      --cidr-block 10.0.0.0/16 \
+      --tag-specifications 'ResourceType=vpc,Tags=[{Key=Name,Value=auditor-vpc}]'
+    ```
+  </Step>
+  
+  <Step title="Create Subnets">
+    Create public and private subnets in two availability zones:
+    
+    ```bash
+    # Public subnet AZ1
+    aws ec2 create-subnet \
+      --vpc-id vpc-xxxxx \
+      --cidr-block 10.0.1.0/24 \
+      --availability-zone us-east-1a
+    
+    # Public subnet AZ2
+    aws ec2 create-subnet \
+      --vpc-id vpc-xxxxx \
+      --cidr-block 10.0.2.0/24 \
+      --availability-zone us-east-1b
+    
+    # Private subnet AZ1
+    aws ec2 create-subnet \
+      --vpc-id vpc-xxxxx \
+      --cidr-block 10.0.11.0/24 \
+      --availability-zone us-east-1a
+    
+    # Private subnet AZ2
+    aws ec2 create-subnet \
+      --vpc-id vpc-xxxxx \
+      --cidr-block 10.0.12.0/24 \
+      --availability-zone us-east-1b
+    ```
+  </Step>
+  
+  <Step title="Configure Gateways">
+    ```bash
+    # Internet Gateway
+    aws ec2 create-internet-gateway
+    aws ec2 attach-internet-gateway --vpc-id vpc-xxxxx --internet-gateway-id igw-xxxxx
+    
+    # NAT Gateway (for private subnets)
+    aws ec2 create-nat-gateway \
+      --subnet-id subnet-public-xxxxx \
+      --allocation-id eipalloc-xxxxx
+    ```
+  </Step>
+  
+  <Step title="Configure Route Tables">
+    ```bash
+    # Public route table
+    aws ec2 create-route \
+      --route-table-id rtb-public-xxxxx \
+      --destination-cidr-block 0.0.0.0/0 \
+      --gateway-id igw-xxxxx
+    
+    # Private route table
+    aws ec2 create-route \
+      --route-table-id rtb-private-xxxxx \
+      --destination-cidr-block 0.0.0.0/0 \
+      --nat-gateway-id nat-xxxxx
+    ```
+  </Step>
+</Steps>
+
+### Phase 2: Security Groups
+
+<Steps>
+  <Step title="ALB Security Group">
+    Allow HTTPS and HTTP traffic:
+    
+    ```bash
+    aws ec2 create-security-group \
+      --group-name auditor-alb-sg \
+      --description "Security group for ALB" \
+      --vpc-id vpc-xxxxx
+    
+    # Allow HTTPS
+    aws ec2 authorize-security-group-ingress \
+      --group-id sg-alb-xxxxx \
+      --protocol tcp --port 443 --cidr 0.0.0.0/0
+    
+    # Allow HTTP (for redirect)
+    aws ec2 authorize-security-group-ingress \
+      --group-id sg-alb-xxxxx \
+      --protocol tcp --port 80 --cidr 0.0.0.0/0
+    ```
+  </Step>
+  
+  <Step title="ECS Security Group">
+    Allow traffic from ALB only:
+    
+    ```bash
+    aws ec2 create-security-group \
+      --group-name auditor-ecs-sg \
+      --description "Security group for ECS tasks" \
+      --vpc-id vpc-xxxxx
+    
+    aws ec2 authorize-security-group-ingress \
+      --group-id sg-ecs-xxxxx \
+      --protocol tcp --port 8000 \
+      --source-group sg-alb-xxxxx
+    ```
+  </Step>
+  
+  <Step title="RDS Security Group">
+    Allow PostgreSQL from ECS only:
+    
+    ```bash
+    aws ec2 create-security-group \
+      --group-name auditor-rds-sg \
+      --description "Security group for RDS" \
+      --vpc-id vpc-xxxxx
+    
+    aws ec2 authorize-security-group-ingress \
+      --group-id sg-rds-xxxxx \
+      --protocol tcp --port 5432 \
+      --source-group sg-ecs-xxxxx
+    ```
+  </Step>
+  
+  <Step title="ElastiCache Security Group">
+    Allow Redis from ECS only:
+    
+    ```bash
+    aws ec2 create-security-group \
+      --group-name auditor-redis-sg \
+      --description "Security group for ElastiCache" \
+      --vpc-id vpc-xxxxx
+    
+    aws ec2 authorize-security-group-ingress \
+      --group-id sg-redis-xxxxx \
+      --protocol tcp --port 6379 \
+      --source-group sg-ecs-xxxxx
+    ```
+  </Step>
+</Steps>
+
+### Phase 3: Database (RDS PostgreSQL)
+
+<Steps>
+  <Step title="Create DB Subnet Group">
+    ```bash
+    aws rds create-db-subnet-group \
+      --db-subnet-group-name auditor-db-subnet-group \
+      --db-subnet-group-description "Subnet group for RDS" \
+      --subnet-ids subnet-private-1 subnet-private-2
+    ```
+  </Step>
+  
+  <Step title="Create RDS Instance">
+    ```bash
+    aws rds create-db-instance \
+      --db-instance-identifier auditor-db \
+      --db-instance-class db.t3.small \
+      --engine postgres \
+      --engine-version 16.1 \
+      --master-username auditor \
+      --master-user-password YOUR_SECURE_PASSWORD \
+      --allocated-storage 20 \
+      --storage-encrypted \
+      --vpc-security-group-ids sg-rds-xxxxx \
+      --db-subnet-group-name auditor-db-subnet-group \
+      --multi-az \
+      --backup-retention-period 30 \
+      --preferred-backup-window "03:00-04:00" \
+      --preferred-maintenance-window "mon:04:00-mon:05:00"
+    ```
+  </Step>
+  
+  <Step title="Enable Auto-scaling Storage">
+    ```bash
+    aws rds modify-db-instance \
+      --db-instance-identifier auditor-db \
+      --max-allocated-storage 1000 \
+      --apply-immediately
+    ```
+  </Step>
+  
+  <Step title="Note the Endpoint">
+    ```bash
+    aws rds describe-db-instances \
+      --db-instance-identifier auditor-db \
+      --query 'DBInstances[0].Endpoint.Address' \
+      --output text
+    ```
+    
+    Save this endpoint for DATABASE_URL configuration.
+  </Step>
+</Steps>
+
+### Phase 4: Cache (ElastiCache Redis)
+
+<Steps>
+  <Step title="Create Cache Subnet Group">
+    ```bash
+    aws elasticache create-cache-subnet-group \
+      --cache-subnet-group-name auditor-cache-subnet-group \
+      --cache-subnet-group-description "Subnet group for ElastiCache" \
+      --subnet-ids subnet-private-1 subnet-private-2
+    ```
+  </Step>
+  
+  <Step title="Create Redis Cluster">
+    ```bash
+    aws elasticache create-replication-group \
+      --replication-group-id auditor-redis \
+      --replication-group-description "Redis for LatentGEO" \
+      --engine redis \
+      --cache-node-type cache.t3.small \
+      --num-cache-clusters 2 \
+      --automatic-failover-enabled \
+      --at-rest-encryption-enabled \
+      --transit-encryption-enabled \
+      --cache-subnet-group-name auditor-cache-subnet-group \
+      --security-group-ids sg-redis-xxxxx
+    ```
+  </Step>
+  
+  <Step title="Note the Endpoint">
+    ```bash
+    aws elasticache describe-replication-groups \
+      --replication-group-id auditor-redis \
+      --query 'ReplicationGroups[0].NodeGroups[0].PrimaryEndpoint.Address' \
+      --output text
+    ```
+    
+    Save this endpoint for REDIS_URL configuration.
+  </Step>
+</Steps>
+
+### Phase 5: Secrets Manager
+
+<Steps>
+  <Step title="Create Secret for Credentials">
+    ```bash
+    aws secretsmanager create-secret \
+      --name auditor-geo/prod \
+      --description "Production credentials for LatentGEO" \
+      --secret-string '{
+        "DATABASE_URL": "postgresql+psycopg2://auditor:PASSWORD@rds-endpoint:5432/auditor_db",
+        "REDIS_URL": "redis://redis-endpoint:6379/0",
+        "SECRET_KEY": "your-secret-key",
+        "ENCRYPTION_KEY": "your-encryption-key",
+        "BACKEND_INTERNAL_JWT_SECRET": "your-jwt-secret"
+      }'
+    ```
+  </Step>
+  
+  <Step title="Create Secret for API Keys">
+    ```bash
+    aws secretsmanager create-secret \
+      --name auditor-geo/prod/api-keys \
+      --secret-string '{
+        "GOOGLE_API_KEY": "your-google-key",
+        "CSE_ID": "your-cse-id",
+        "SERPER_API_KEY": "your-serper-key",
+        "NVIDIA_API_KEY": "your-nvidia-key",
+        "GOOGLE_PAGESPEED_API_KEY": "your-pagespeed-key"
+      }'
+    ```
+  </Step>
+  
+  <Step title="Create Secret for Auth0">
+    ```bash
+    aws secretsmanager create-secret \
+      --name auditor-geo/prod/auth0 \
+      --secret-string '{
+        "AUTH0_DOMAIN": "your-domain.auth0.com",
+        "AUTH0_CLIENT_ID": "your-client-id",
+        "AUTH0_CLIENT_SECRET": "your-client-secret",
+        "AUTH0_API_AUDIENCE": "your-api-audience"
+      }'
+    ```
+  </Step>
+</Steps>
+
+## Container Deployment
+
+### Phase 6: ECR Repositories
+
+<Steps>
+  <Step title="Create Repositories">
+    ```bash
+    # Backend repository
+    aws ecr create-repository \
+      --repository-name auditor-geo/backend \
+      --image-scanning-configuration scanOnPush=true
+    
+    # Frontend repository
+    aws ecr create-repository \
+      --repository-name auditor-geo/frontend \
+      --image-scanning-configuration scanOnPush=true
+    ```
+  </Step>
+  
+  <Step title="Configure Lifecycle Policies">
+    ```bash
+    aws ecr put-lifecycle-policy \
+      --repository-name auditor-geo/backend \
+      --lifecycle-policy-text '{
+        "rules": [{
+          "rulePriority": 1,
+          "description": "Keep last 10 images",
+          "selection": {
+            "tagStatus": "any",
+            "countType": "imageCountMoreThan",
+            "countNumber": 10
+          },
+          "action": {"type": "expire"}
+        }]
+      }'
+    ```
+  </Step>
+</Steps>
+
+### Phase 7: Build and Push Images
+
+<Steps>
+  <Step title="Login to ECR">
+    ```bash
+    aws ecr get-login-password --region us-east-1 | \
+      docker login --username AWS --password-stdin \
+      ACCOUNT.dkr.ecr.us-east-1.amazonaws.com
+    ```
+  </Step>
+  
+  <Step title="Build Backend Image">
+    ```bash
+    docker build -f Dockerfile.backend -t auditor-backend:latest .
+    
+    docker tag auditor-backend:latest \
+      ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/auditor-geo/backend:latest
+    
+    docker push \
+      ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/auditor-geo/backend:latest
+    ```
+  </Step>
+  
+  <Step title="Build Frontend Image">
+    ```bash
+    docker build -f Dockerfile.frontend \
+      --build-arg NEXT_PUBLIC_API_URL=https://api.yourdomain.com \
+      --build-arg NEXT_PUBLIC_BACKEND_URL=https://api.yourdomain.com \
+      -t auditor-frontend:latest .
+    
+    docker tag auditor-frontend:latest \
+      ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/auditor-geo/frontend:latest
+    
+    docker push \
+      ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/auditor-geo/frontend:latest
+    ```
+  </Step>
+</Steps>
+
+### Phase 8: ECS Cluster and Services
+
+<Steps>
+  <Step title="Create ECS Cluster">
+    ```bash
+    aws ecs create-cluster --cluster-name auditor-cluster
+    ```
+  </Step>
+  
+  <Step title="Create CloudWatch Log Groups">
+    ```bash
+    aws logs create-log-group --log-group-name /ecs/auditor-backend
+    aws logs create-log-group --log-group-name /ecs/auditor-frontend
+    aws logs create-log-group --log-group-name /ecs/auditor-worker
+    ```
+  </Step>
+  
+  <Step title="Create Task Execution Role">
+    This role allows ECS to pull images and write logs:
+    
+    ```bash
+    aws iam create-role \
+      --role-name ecsTaskExecutionRole \
+      --assume-role-policy-document file://ecs-task-trust-policy.json
+    
+    aws iam attach-role-policy \
+      --role-name ecsTaskExecutionRole \
+      --policy-arn arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+    ```
+  </Step>
+  
+  <Step title="Create Task Definition">
+    Create a task definition JSON file with backend, frontend, and worker containers. Reference the Dockerfile configurations:
+    
+    - Backend: Port 8000, health check on `/health/live`
+    - Frontend: Port 3000
+    - Worker: Celery with concurrency=2
+    
+    Register the task definition:
+    
+    ```bash
+    aws ecs register-task-definition --cli-input-json file://task-definition.json
+    ```
+  </Step>
+  
+  <Step title="Create ECS Service">
+    ```bash
+    aws ecs create-service \
+      --cluster auditor-cluster \
+      --service-name auditor-service \
+      --task-definition auditor-task:1 \
+      --desired-count 2 \
+      --launch-type FARGATE \
+      --network-configuration "awsvpcConfiguration={subnets=[subnet-private-1,subnet-private-2],securityGroups=[sg-ecs-xxxxx],assignPublicIp=DISABLED}" \
+      --load-balancers "targetGroupArn=arn:aws:elasticloadbalancing:...,containerName=backend,containerPort=8000"
+    ```
+  </Step>
+</Steps>
+
+## Load Balancing and DNS
+
+### Phase 9: Application Load Balancer
+
+<Steps>
+  <Step title="Create ALB">
+    ```bash
+    aws elbv2 create-load-balancer \
+      --name auditor-alb \
+      --subnets subnet-public-1 subnet-public-2 \
+      --security-groups sg-alb-xxxxx \
+      --scheme internet-facing
+    ```
+  </Step>
+  
+  <Step title="Create Target Group">
+    ```bash
+    aws elbv2 create-target-group \
+      --name auditor-backend-tg \
+      --protocol HTTP \
+      --port 8000 \
+      --vpc-id vpc-xxxxx \
+      --target-type ip \
+      --health-check-enabled \
+      --health-check-path /health \
+      --health-check-interval-seconds 30 \
+      --health-check-timeout-seconds 5 \
+      --healthy-threshold-count 2 \
+      --unhealthy-threshold-count 3
+    ```
+  </Step>
+  
+  <Step title="Create HTTPS Listener">
+    ```bash
+    aws elbv2 create-listener \
+      --load-balancer-arn arn:aws:elasticloadbalancing:... \
+      --protocol HTTPS \
+      --port 443 \
+      --certificates CertificateArn=arn:aws:acm:... \
+      --default-actions Type=forward,TargetGroupArn=arn:aws:elasticloadbalancing:...
+    ```
+  </Step>
+  
+  <Step title="Create HTTP Redirect Listener">
+    ```bash
+    aws elbv2 create-listener \
+      --load-balancer-arn arn:aws:elasticloadbalancing:... \
+      --protocol HTTP \
+      --port 80 \
+      --default-actions Type=redirect,RedirectConfig="{Protocol=HTTPS,Port=443,StatusCode=HTTP_301}"
+    ```
+  </Step>
+</Steps>
+
+### Phase 10: CloudFront and Route 53
+
+<Steps>
+  <Step title="Create CloudFront Distribution">
+    Create a distribution with:
+    - Origin 1: ALB (for backend /api/* paths)
+    - Default behavior: Forward all headers for API requests
+    - Enable compression
+    - Enable HTTP/2
+    - Associate ACM certificate
+  </Step>
+  
+  <Step title="Configure DNS">
+    ```bash
+    # Create A record pointing to CloudFront
+    aws route53 change-resource-record-sets \
+      --hosted-zone-id Z1234567890ABC \
+      --change-batch '{
+        "Changes": [{
+          "Action": "CREATE",
+          "ResourceRecordSet": {
+            "Name": "yourdomain.com",
+            "Type": "A",
+            "AliasTarget": {
+              "HostedZoneId": "Z2FDTNDATAQYW2",
+              "DNSName": "d123456789.cloudfront.net",
+              "EvaluateTargetHealth": false
+            }
+          }
+        }]
+      }'
+    ```
+  </Step>
+</Steps>
+
+## Security Hardening
+
+### Phase 11: WAF Configuration
+
+<Steps>
+  <Step title="Create Web ACL">
+    ```bash
+    aws wafv2 create-web-acl \
+      --name auditor-waf \
+      --scope CLOUDFRONT \
+      --default-action Allow={} \
+      --rules file://waf-rules.json
+    ```
+  </Step>
+  
+  <Step title="Add Managed Rule Sets">
+    Include these AWS Managed Rules:
+    - AWSManagedRulesCommonRuleSet
+    - AWSManagedRulesKnownBadInputsRuleSet
+    - AWSManagedRulesSQLiRuleSet
+    - AWSManagedRulesAmazonIpReputationList
+  </Step>
+  
+  <Step title="Add Rate Limiting">
+    ```json
+    {
+      "Name": "RateLimitRule",
+      "Priority": 1,
+      "Statement": {
+        "RateBasedStatement": {
+          "Limit": 2000,
+          "AggregateKeyType": "IP"
+        }
+      },
+      "Action": {"Block": {}}
+    }
+    ```
+  </Step>
+  
+  <Step title="Associate with CloudFront">
+    ```bash
+    aws cloudfront update-distribution \
+      --id E1234567890ABC \
+      --web-acl-id arn:aws:wafv2:...
+    ```
+  </Step>
+</Steps>
+
+## Monitoring and Auto-scaling
+
+### Phase 12: CloudWatch and Alarms
+
+<Steps>
+  <Step title="Create Dashboard">
+    Create a CloudWatch dashboard tracking:
+    - ECS CPU/Memory utilization
+    - RDS CPU/Connections/Storage
+    - Redis CPU/Memory/Evictions
+    - ALB request count/error rate/latency
+    - CloudFront requests/cache hit ratio
+  </Step>
+  
+  <Step title="Configure Alarms">
+    ```bash
+    # ECS CPU alarm
+    aws cloudwatch put-metric-alarm \
+      --alarm-name auditor-ecs-high-cpu \
+      --alarm-description "ECS CPU > 80%" \
+      --metric-name CPUUtilization \
+      --namespace AWS/ECS \
+      --statistic Average \
+      --period 300 \
+      --threshold 80 \
+      --comparison-operator GreaterThanThreshold \
+      --evaluation-periods 2
+    
+    # RDS CPU alarm
+    aws cloudwatch put-metric-alarm \
+      --alarm-name auditor-rds-high-cpu \
+      --alarm-description "RDS CPU > 80%" \
+      --metric-name CPUUtilization \
+      --namespace AWS/RDS \
+      --statistic Average \
+      --period 300 \
+      --threshold 80 \
+      --comparison-operator GreaterThanThreshold \
+      --evaluation-periods 2
+    ```
+  </Step>
+  
+  <Step title="Configure Auto-scaling">
+    ```bash
+    # Register scalable target
+    aws application-autoscaling register-scalable-target \
+      --service-namespace ecs \
+      --resource-id service/auditor-cluster/auditor-service \
+      --scalable-dimension ecs:service:DesiredCount \
+      --min-capacity 2 \
+      --max-capacity 10
+    
+    # Create scaling policy
+    aws application-autoscaling put-scaling-policy \
+      --service-namespace ecs \
+      --resource-id service/auditor-cluster/auditor-service \
+      --scalable-dimension ecs:service:DesiredCount \
+      --policy-name cpu-scaling-policy \
+      --policy-type TargetTrackingScaling \
+      --target-tracking-scaling-policy-configuration file://scaling-policy.json
+    ```
+  </Step>
+</Steps>
+
+## Production Environment Variables
+
+<Warning>
+  Store all sensitive values in AWS Secrets Manager. Never hardcode credentials in task definitions.
+</Warning>
+
+```bash
+# Database & Cache
+DATABASE_URL=postgresql+psycopg2://auditor:PASSWORD@rds-endpoint:5432/auditor_db
+DB_POOL_SIZE=10
+DB_MAX_OVERFLOW=20
+DB_POOL_TIMEOUT=30
+DB_POOL_RECYCLE=3600
+DB_POOL_PRE_PING=true
+REDIS_URL=redis://redis-endpoint:6379/0
+CELERY_BROKER_URL=redis://redis-endpoint:6379/0
+CELERY_RESULT_BACKEND=redis://redis-endpoint:6379/1
+
+# SSE Configuration
+SSE_SOURCE=redis
+SSE_FALLBACK_DB_INTERVAL_SECONDS=10
+SSE_HEARTBEAT_SECONDS=30
+SSE_RETRY_MS=5000
+
+# Security
+SECRET_KEY=<from-secrets-manager>
+ENCRYPTION_KEY=<from-secrets-manager>
+BACKEND_INTERNAL_JWT_SECRET=<from-secrets-manager>
+
+# Environment
+ENVIRONMENT=production
+DEBUG=False
+
+# CORS
+CORS_ORIGINS=https://yourdomain.com
+TRUSTED_HOSTS=yourdomain.com,api.yourdomain.com
+FRONTEND_URL=https://yourdomain.com
+
+# Auth0
+AUTH0_DOMAIN=<from-secrets-manager>
+AUTH0_ISSUER_BASE_URL=https://your-domain.auth0.com
+AUTH0_API_AUDIENCE=<from-secrets-manager>
+AUTH0_EXPECTED_CLIENT_ID=<from-secrets-manager>
+
+# API Keys
+GOOGLE_API_KEY=<from-secrets-manager>
+SERPER_API_KEY=<from-secrets-manager>
+NVIDIA_API_KEY=<from-secrets-manager>
+
+# Monitoring
+SENTRY_DSN=<your-sentry-dsn>
+```
+
+## Disaster Recovery
+
+### Backup Strategy
+
+<Steps>
+  <Step title="RDS Automated Backups">
+    - Retention period: 30 days
+    - Backup window: 03:00-04:00 UTC
+    - Create manual snapshot before major changes
+  </Step>
+  
+  <Step title="Test Recovery">
+    Monthly recovery drill:
+    
+    ```bash
+    # Restore from snapshot
+    aws rds restore-db-instance-from-db-snapshot \
+      --db-instance-identifier auditor-db-restored \
+      --db-snapshot-identifier rds:auditor-db-2024-03-01-03-00
+    ```
+  </Step>
+  
+  <Step title="Document RTO/RPO">
+    - **RTO** (Recovery Time Objective): 1 hour
+    - **RPO** (Recovery Point Objective): 5 minutes (via automated backups)
+  </Step>
+</Steps>
+
+## Cost Optimization
+
+<Note>
+  Estimated monthly costs for production deployment:
+  - ECS Fargate: $50-100
+  - RDS db.t3.small: $50-70
+  - ElastiCache cache.t3.small: $40-60
+  - ALB: $20-30
+  - CloudFront: $10-30
+  - Data Transfer: $20-40
+  - **Total: ~$300/month**
+</Note>
+
+### Optimization Tips
+
+- Use AWS Free Tier for eligible services
+- Configure billing alerts at $100, $200, $300
+- Enable Cost Explorer for detailed analysis
+- Use Savings Plans for predictable workloads
+- Right-size instances based on CloudWatch metrics
+- Configure ECS auto-scaling to scale down during off-peak hours
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Docker Deployment" icon="docker" href="/deployment/docker">
+    Run LatentGEO locally with Docker Compose
+  </Card>
+  <Card title="CI/CD Setup" icon="github" href="/deployment/cicd">
+    Automate deployments with GitHub Actions
+  </Card>
+</CardGroup>

@@ -1,0 +1,306 @@
+---
+title: Webhooks
+description: Configure and receive webhook notifications
+---
+
+## Overview
+
+Webhooks allow you to receive real-time HTTP notifications when events occur in LatentGEO. Configure your endpoint to receive POST requests with event payloads.
+
+---
+
+## Webhook Configuration
+
+### Create Webhook Config
+
+**POST** `/api/v1/webhooks/config`
+
+Creates a new webhook configuration.
+
+<RequestExample>
+```bash cURL
+curl -X POST https://api.latentgeo.com/api/v1/webhooks/config \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://your-app.com/webhooks/latentgeo",
+    "secret": "your-webhook-secret-min-16-chars",
+    "events": ["audit.completed", "pdf.ready"],
+    "active": true,
+    "description": "Production webhook for audit notifications"
+  }'
+```
+</RequestExample>
+
+<ParamField body="url" type="string" required>
+  HTTPS URL to receive webhook POST requests
+</ParamField>
+
+<ParamField body="secret" type="string">
+  Secret for signing payloads (16-256 characters). Used to generate HMAC-SHA256 signature.
+</ParamField>
+
+<ParamField body="events" type="array" default='["audit.completed", "pdf.ready"]'>
+  List of events to subscribe to
+</ParamField>
+
+<ParamField body="active" type="boolean" default="true">
+  Whether the webhook is active
+</ParamField>
+
+<ParamField body="description" type="string">
+  Optional description (max 500 characters)
+</ParamField>
+
+<Note>
+  Webhook URLs must use HTTPS in production. HTTP is only allowed in debug mode.
+</Note>
+
+---
+
+### Test Webhook
+
+**POST** `/api/v1/webhooks/test`
+
+Sends a test event to verify your endpoint.
+
+<ParamField body="url" type="string" required>
+  Webhook URL to test
+</ParamField>
+
+<ParamField body="secret" type="string">
+  Webhook secret for signature verification
+</ParamField>
+
+<ParamField body="event_type" type="string" default="audit.completed">
+  Event type to send
+</ParamField>
+
+<ResponseField name="success" type="boolean">
+  Whether test succeeded
+</ResponseField>
+
+<ResponseField name="status_code" type="integer">
+  HTTP status code returned by your endpoint
+</ResponseField>
+
+<ResponseField name="response_time_ms" type="number">
+  Response time in milliseconds
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message (if test failed)
+</ResponseField>
+
+---
+
+### List Webhook Events
+
+**GET** `/api/v1/webhooks/events`
+
+Returns all available webhook event types.
+
+<ResponseField name="events" type="array">
+  Array of event type objects with descriptions
+</ResponseField>
+
+---
+
+## Webhook Events
+
+### Available Events
+
+| Event | Description |
+|-------|-------------|
+| `audit.created` | Triggered when a new audit is created |
+| `audit.started` | Triggered when audit processing begins |
+| `audit.completed` | Triggered when audit finishes successfully |
+| `audit.failed` | Triggered when audit fails with an error |
+| `audit.progress` | Triggered at progress milestones (25%, 50%, 75%) |
+| `report.generated` | Triggered when audit report is generated |
+| `pdf.ready` | Triggered when PDF report is ready |
+| `pagespeed.completed` | Triggered when PageSpeed analysis completes |
+| `geo.analysis.completed` | Triggered when GEO tools analysis completes |
+| `github.pr.created` | Triggered when GitHub PR is created |
+| `github.sync.completed` | Triggered when GitHub sync completes |
+| `competitor.analysis.completed` | Triggered when competitor analysis completes |
+
+---
+
+## Receiving Webhooks
+
+### Payload Structure
+
+All webhook POST requests include:
+
+```json
+{
+  "event": "audit.completed",
+  "timestamp": "2026-03-03T10:30:00Z",
+  "webhook_id": "wh_1234567890",
+  "data": {
+    "audit_id": 123,
+    "url": "https://example.com",
+    "status": "completed",
+    "geo_score": 78.5,
+    "total_pages": 25
+  }
+}
+```
+
+<ResponseField name="event" type="string">
+  Event type
+</ResponseField>
+
+<ResponseField name="timestamp" type="string">
+  ISO 8601 timestamp
+</ResponseField>
+
+<ResponseField name="webhook_id" type="string">
+  Unique delivery ID for idempotency
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Event-specific payload data
+</ResponseField>
+
+---
+
+### HTTP Headers
+
+Webhook requests include the following headers:
+
+| Header | Description |
+|--------|-------------|
+| `X-Webhook-Signature` | HMAC-SHA256 signature (if secret configured) |
+| `X-Webhook-Event` | Event type |
+| `X-Webhook-Timestamp` | Delivery timestamp |
+| `Content-Type` | `application/json` |
+
+---
+
+### Signature Verification
+
+If you configured a webhook secret, verify the signature:
+
+```python Python
+import hmac
+import hashlib
+
+def verify_webhook_signature(payload_body: bytes, signature: str, secret: str) -> bool:
+    expected_signature = hmac.new(
+        secret.encode(),
+        payload_body,
+        hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(signature, expected_signature)
+
+# Usage
+request_signature = request.headers.get('X-Webhook-Signature')
+if not verify_webhook_signature(request.body, request_signature, webhook_secret):
+    return Response('Invalid signature', status=401)
+```
+
+```typescript TypeScript
+import crypto from 'crypto';
+
+function verifyWebhookSignature(
+  payloadBody: string,
+  signature: string,
+  secret: string
+): boolean {
+  const expectedSignature = crypto
+    .createHmac('sha256', secret)
+    .update(payloadBody)
+    .digest('hex');
+  
+  return crypto.timingSafeEqual(
+    Buffer.from(signature),
+    Buffer.from(expectedSignature)
+  );
+}
+```
+
+---
+
+### Best Practices
+
+<Tip>
+  **Return 200 quickly**: Respond with HTTP 200 within 5 seconds. Process the webhook asynchronously to avoid timeouts.
+</Tip>
+
+1. **Verify signatures**: Always verify the `X-Webhook-Signature` header
+2. **Idempotency**: Use `webhook_id` to prevent duplicate processing
+3. **Retry handling**: Implement exponential backoff for failed deliveries
+4. **Timeouts**: Respond within 5 seconds to avoid retries
+5. **Logging**: Log all webhook deliveries for debugging
+
+---
+
+## Incoming Webhooks
+
+### GitHub Webhook
+
+**POST** `/api/v1/webhooks/github/incoming`
+
+Receives GitHub webhook events (push, pull_request, issues).
+
+<Note>
+  Requires `X-Hub-Signature-256` header for signature verification.
+</Note>
+
+<ParamField header="X-Hub-Signature-256" type="string" required>
+  GitHub webhook signature
+</ParamField>
+
+<ParamField header="X-GitHub-Event" type="string" required>
+  GitHub event type
+</ParamField>
+
+---
+
+### HubSpot Webhook
+
+**POST** `/api/v1/webhooks/hubspot/incoming`
+
+Receives HubSpot CRM events (contact.creation, contact.propertyChange, deal.creation).
+
+---
+
+## Health Check
+
+**GET** `/api/v1/webhooks/health`
+
+Returns webhook service health status.
+
+<ResponseField name="status" type="string">
+  Service status (healthy)
+</ResponseField>
+
+<ResponseField name="service" type="string">
+  Service name (webhook)
+</ResponseField>
+
+<ResponseField name="supported_events" type="integer">
+  Number of supported event types
+</ResponseField>
+
+<ResponseField name="timestamp" type="string">
+  Current server timestamp
+</ResponseField>
+
+---
+
+## Error Codes
+
+<ResponseField name="400" type="error">
+  Invalid event type or JSON payload
+</ResponseField>
+
+<ResponseField name="401" type="error">
+  Invalid webhook signature
+</ResponseField>
+
+<ResponseField name="503" type="error">
+  Webhook secret not configured on server
+</ResponseField>

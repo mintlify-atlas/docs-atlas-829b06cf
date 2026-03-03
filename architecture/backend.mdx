@@ -1,0 +1,442 @@
+---
+title: 'Backend Architecture'
+description: 'FastAPI backend service architecture and patterns'
+icon: 'server'
+---
+
+## FastAPI Backend
+
+The backend is a production-ready FastAPI application following Level 2/3 professional practices with modular service architecture, comprehensive middleware, and async task processing.
+
+## Technology Stack
+
+### Core Dependencies
+
+```python
+# Web Framework
+fastapi==0.135.0
+uvicorn[standard]==0.24.0
+python-multipart>=0.0.22
+
+# Database
+sqlalchemy==2.0.44
+alembic==1.12.1
+psycopg2-binary==2.9.9
+supabase>=2.3.0
+
+# AI/LLM Integration
+openai==1.61.0
+aiohttp>=3.13.3
+
+# Task Queue
+celery==5.3.4
+redis==5.0.1
+
+# Validation
+pydantic>=2.6.0
+pydantic-settings==2.1.0
+
+# Monitoring
+sentry-sdk[fastapi]>=1.40.0
+structlog>=24.1.0
+```
+
+## Application Structure
+
+```
+backend/
+├── app/
+│   ├── main.py                    # Application factory
+│   ├── api/
+│   │   └── routes/
+│   │       ├── audits.py          # Audit endpoints
+│   │       ├── reports.py         # Report generation
+│   │       ├── analytics.py       # Analytics endpoints
+│   │       ├── sse.py             # SSE real-time endpoints
+│   │       ├── webhooks.py        # Webhook handlers
+│   │       ├── ai_content.py      # AI content generation
+│   │       ├── keywords.py        # Keyword research
+│   │       ├── rank_tracking.py   # Rank tracking
+│   │       └── health.py          # Health checks
+│   ├── core/
+│   │   ├── config.py              # Settings & configuration
+│   │   ├── database.py            # DB connection & session
+│   │   ├── logger.py              # Structured logging
+│   │   ├── auth.py                # Authentication
+│   │   ├── middleware.py          # Security middleware
+│   │   └── access_control.py      # Authorization
+│   ├── models/
+│   │   └── __init__.py            # SQLAlchemy models
+│   ├── schemas/
+│   │   └── __init__.py            # Pydantic schemas
+│   ├── services/
+│   │   ├── audit_service.py       # Audit business logic
+│   │   ├── pipeline_service.py    # Processing pipeline
+│   │   ├── cache_service.py       # Redis caching
+│   │   ├── ai_content_service.py  # AI integrations
+│   │   ├── webhook_service.py     # Webhook delivery
+│   │   └── ...                    # Other services
+│   ├── middleware/
+│   │   ├── rate_limit.py          # Distributed rate limiting
+│   │   └── legacy_api_redirect.py # API migration support
+│   └── workers/
+│       └── tasks.py                # Celery tasks
+├── main.py                         # Entry point
+├── requirements.txt                # Dependencies
+└── .env.example                    # Config template
+```
+
+## Application Factory Pattern
+
+The `main.py` uses a factory pattern for clean application initialization:
+
+```python backend/app/main.py
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifecycle management."""
+    logger.info(f"STARTUP: {settings.APP_NAME} v{settings.APP_VERSION}")
+    
+    # Validate environment
+    validate_environment()
+    
+    # Initialize database
+    await init_db()
+    
+    yield
+    
+    logger.info(f"SHUTDOWN: {settings.APP_NAME}")
+
+def create_app() -> FastAPI:
+    """Factory for creating FastAPI application."""
+    app = FastAPI(
+        title=settings.APP_NAME,
+        version=settings.APP_VERSION,
+        debug=settings.DEBUG,
+        lifespan=lifespan,
+    )
+    
+    # Configure middleware
+    configure_middleware(app)
+    
+    # Register routes
+    register_routes(app)
+    
+    return app
+
+app = create_app()
+```
+
+## API Versioning
+
+All business endpoints are versioned under `/api/v1` for API stability:
+
+```python backend/app/main.py
+# API Router with version prefix
+v1 = APIRouter(prefix="/api/v1")
+
+# Register business routers
+api_route_modules = [
+    audits,
+    reports,
+    analytics,
+    search,
+    pagespeed,
+    keywords,
+    ai_content,
+    webhooks,
+    sse,
+    # ... other modules
+]
+
+for module in api_route_modules:
+    v1.include_router(module.router)
+
+app.include_router(v1)
+
+# Global non-versioned routes
+app.include_router(health.router)  # /health, /health/ready, /health/live
+```
+
+**API Structure:**
+- Business endpoints: `/api/v1/*`
+- Health checks: `/health/*` (non-versioned)
+- Documentation: `/docs`, `/redoc` (non-versioned)
+
+## Middleware Stack
+
+Middleware is configured in reverse order (last added = first executed):
+
+### 1. CORS Middleware
+
+```python backend/app/main.py
+cors_origins = set(settings.CORS_ORIGINS)
+
+if settings.DEBUG:
+    cors_origins.update([
+        "http://frontend:3000",
+        "http://localhost:3000",
+        "http://localhost:8000",
+    ])
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=list(cors_origins),
+    allow_credentials=True,  # Required for auth cookies
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+```
+
+### 2. Rate Limiting Middleware
+
+Distributed rate limiting with Redis backend:
+
+```python backend/app/middleware/rate_limit.py
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    """Redis-backed distributed rate limiting."""
+    
+    def __init__(self, app,
+                 default_limit: int = 100,
+                 default_window: int = 60,
+                 endpoint_limits: Dict[str, Tuple[int, int]] = None):
+        self.endpoint_limits = endpoint_limits or {}
+        # Endpoint-specific limits
+
+endpoint_limits = {
+    "/api/v1/auth": (10, 60),              # 10/min - prevent brute force
+    "/api/v1/audits": (600, 60),           # 600/min - polling support
+    "/api/v1/audits/generate-pdf": (10, 60), # 10/min - heavy operation
+    "/api/v1/search": (30, 60),            # 30/min
+    "/api/v1/webhooks": (1000, 60),        # Unlimited (internal)
+}
+```
+
+**Features:**
+- Sliding window algorithm
+- Endpoint-specific limits
+- Trusted IP bypass
+- Rate limit headers (`X-RateLimit-*`)
+- SSE endpoint exemption
+
+### 3. Security Headers Middleware
+
+```python backend/app/core/middleware.py
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        
+        # Security headers
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        
+        # Content Security Policy
+        response.headers["Content-Security-Policy"] = csp_directives
+        
+        return response
+```
+
+### 4. Proxy Headers Middleware
+
+Extract real client IP behind proxies/load balancers:
+
+```python backend/app/main.py
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+
+app.add_middleware(
+    ProxyHeadersMiddleware,
+    trusted_hosts=settings.FORWARDED_ALLOW_IPS
+)
+```
+
+### 5. Request Validation Middleware
+
+Protects against malicious requests:
+
+```python backend/app/core/middleware.py
+class RequestValidationMiddleware(BaseHTTPMiddleware):
+    MAX_CONTENT_LENGTH = 10 * 1024 * 1024  # 10 MB
+    MAX_URL_LENGTH = 2048
+    
+    async def dispatch(self, request: Request, call_next):
+        # Check URL length
+        if len(str(request.url)) > self.MAX_URL_LENGTH:
+            return JSONResponse(status_code=414)
+        
+        # Check content length
+        if content_length > self.MAX_CONTENT_LENGTH:
+            return JSONResponse(status_code=413)
+        
+        # Block path traversal, XSS attempts, etc.
+        suspicious_patterns = ["../", "<script", "javascript:", ...]
+        
+        return await call_next(request)
+```
+
+### 6. Request Logging Middleware
+
+Structured request logging for security auditing:
+
+```python backend/app/core/middleware.py
+class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        start_time = time.time()
+        response = await call_next(request)
+        duration = time.time() - start_time
+        
+        logger.info(
+            f"{request.method} {request.url.path} "
+            f"- {response.status_code} "
+            f"- {client_ip} "
+            f"- {duration:.3f}s"
+        )
+        
+        response.headers["X-Response-Time"] = f"{duration:.3f}s"
+        return response
+```
+
+## Service Layer Architecture
+
+Business logic is organized in service classes:
+
+```python backend/app/services/audit_service.py
+class AuditService:
+    """Service for managing audits."""
+    
+    @staticmethod
+    def create_audit(db: Session, audit_create: AuditCreate) -> Audit:
+        """Create new audit with idempotency check."""
+        # Check for active audits (prevent duplicates)
+        active_audit = db.query(Audit).filter(
+            Audit.url == url,
+            Audit.status.in_([AuditStatus.PENDING, AuditStatus.RUNNING]),
+        ).first()
+        
+        if active_audit:
+            return active_audit
+        
+        # Create new audit
+        audit = Audit(...)
+        db.add(audit)
+        db.commit()
+        
+        # Invalidate cache
+        cache.delete(f"audits_list_{user_email}")
+        
+        return audit
+    
+    @staticmethod
+    def progress_channel(audit_id: int) -> str:
+        """Get Redis channel for audit progress."""
+        return f"audit:progress:{audit_id}"
+    
+    @staticmethod
+    def build_progress_payload(audit: Audit) -> dict:
+        """Build progress payload for real-time updates."""
+        return {
+            "audit_id": audit.id,
+            "status": audit.status,
+            "progress": audit.progress,
+            "geo_score": audit.geo_score,
+            "total_pages": audit.total_pages,
+        }
+```
+
+**Service responsibilities:**
+- Business logic and data operations
+- Transaction management
+- Cache invalidation
+- Event publishing (Redis)
+- External API integration
+
+## Authentication & Authorization
+
+```python backend/app/core/auth.py
+from app.core.auth import get_current_user, AuthUser
+from app.core.access_control import ensure_audit_access
+
+@router.get("/audits/{audit_id}")
+async def get_audit(
+    audit_id: int,
+    current_user: AuthUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    audit = AuditService.get_audit(db, audit_id)
+    ensure_audit_access(audit, current_user)  # Check ownership
+    return audit
+```
+
+**Features:**
+- JWT bearer token authentication
+- Auth0 integration
+- Resource-level authorization
+- User context injection
+
+## OpenAPI Schema Customization
+
+Automatic API documentation with security scheme:
+
+```python backend/app/main.py
+def custom_openapi():
+    openapi_schema = get_openapi(
+        title="🎯 " + settings.APP_NAME,
+        version=settings.APP_VERSION,
+        summary="Plataforma de Auditoría SEO & GEO",
+        routes=app.routes,
+    )
+    
+    # Add security scheme
+    openapi_schema["components"]["securitySchemes"] = {
+        "HTTPBearer": {"type": "http", "scheme": "bearer"}
+    }
+    
+    # Public endpoints (no auth required)
+    public_operations = {
+        ("post", "/api/v1/webhooks/github/incoming"),
+        ("get", "/health"),
+    }
+    
+    # Apply security to all endpoints except public
+    for path, methods in openapi_schema["paths"].items():
+        for method, operation in methods.items():
+            if (method, path) not in public_operations:
+                operation["security"] = [{"HTTPBearer": []}]
+    
+    return openapi_schema
+
+app.openapi = custom_openapi
+```
+
+## Running the Backend
+
+### Development Mode
+
+```bash
+cd backend
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### Production Mode
+
+```bash
+gunicorn -w 4 -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:8000
+```
+
+### Docker (Recommended)
+
+```bash
+docker compose up backend -d
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Frontend Architecture" icon="browser" href="/architecture/frontend">
+    Learn about the Next.js frontend
+  </Card>
+  <Card title="Real-time System" icon="bolt" href="/architecture/real-time">
+    Explore the SSE implementation
+  </Card>
+</CardGroup>

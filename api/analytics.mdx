@@ -1,0 +1,198 @@
+---
+title: Analytics
+description: Access audit analytics and statistics
+---
+
+## Get Audit Analytics
+
+**GET** `/api/v1/analytics/audit/{audit_id}`
+
+Returns comprehensive analytics for a completed audit.
+
+<RequestExample>
+```bash cURL
+curl -X GET https://api.latentgeo.com/api/v1/analytics/audit/123 \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+</RequestExample>
+
+<ResponseExample>
+```json
+{
+  "audit_id": 123,
+  "domain": "example.com",
+  "total_pages": 25,
+  "is_ymyl": false,
+  "category": "blog",
+  "issues": {
+    "critical": 3,
+    "high": 8,
+    "medium": 15,
+    "low": 22,
+    "total": 48
+  },
+  "scores": {
+    "h1_score": 7.5,
+    "structure_score": 8.2,
+    "content_score": 6.8,
+    "eeat_score": 7.1,
+    "schema_score": 5.4,
+    "overall_score": 7.0
+  },
+  "pages": [
+    {
+      "url": "https://example.com/blog/post-1",
+      "path": "/blog/post-1",
+      "overall_score": 7.5,
+      "issues": {
+        "critical": 0,
+        "high": 2,
+        "medium": 3,
+        "low": 5
+      }
+    }
+  ]
+}
+```
+</ResponseExample>
+
+<ResponseField name="audit_id" type="integer">
+  Audit ID
+</ResponseField>
+
+<ResponseField name="domain" type="string">
+  Domain name
+</ResponseField>
+
+<ResponseField name="total_pages" type="integer">
+  Number of pages analyzed
+</ResponseField>
+
+<ResponseField name="issues" type="object">
+  Issue counts by severity level
+</ResponseField>
+
+<ResponseField name="scores" type="object">
+  Average scores across all pages
+</ResponseField>
+
+<ResponseField name="pages" type="array">
+  Per-page analytics data
+</ResponseField>
+
+---
+
+## Get Competitor Analysis
+
+**GET** `/api/v1/analytics/competitors/{audit_id}`
+
+Returns competitive analysis comparing your site against competitors.
+
+<ResponseField name="audit_id" type="integer">
+  Audit ID
+</ResponseField>
+
+<ResponseField name="total_competitors" type="integer">
+  Number of competitors analyzed
+</ResponseField>
+
+<ResponseField name="your_geo_score" type="number">
+  Your GEO optimization score
+</ResponseField>
+
+<ResponseField name="average_competitor_score" type="number">
+  Average competitor GEO score
+</ResponseField>
+
+<ResponseField name="position" type="string">
+  Position relative to competitors
+</ResponseField>
+
+<ResponseField name="competitors" type="array">
+  Competitor details sorted by GEO score
+</ResponseField>
+
+<ResponseField name="identified_gaps" type="array">
+  Top gaps identified vs competitors
+</ResponseField>
+
+---
+
+## Get Dashboard Data
+
+**GET** `/api/v1/analytics/dashboard`
+
+Returns overview statistics for the main dashboard.
+
+<ResponseField name="summary" type="object">
+  Overall statistics (total audits, success rate, etc.)
+</ResponseField>
+
+<ResponseField name="recent_audits" type="array">
+  Most recent audits with status
+</ResponseField>
+
+<ResponseField name="metrics" type="object">
+  Key metrics (unique domains, total issues)
+</ResponseField>
+
+---
+
+## Get Issues by Priority
+
+**GET** `/api/v1/analytics/issues/{audit_id}`
+
+Returns issues grouped by priority level.
+
+<RequestExample>
+```bash cURL
+curl -X GET https://api.latentgeo.com/api/v1/analytics/issues/123 \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+</RequestExample>
+
+<ResponseExample>
+```json
+{
+  "audit_id": 123,
+  "total_issues": 48,
+  "by_priority": {
+    "CRITICAL": [
+      {
+        "page_path": "/blog/post-1",
+        "issue_code": "MISSING_TITLE",
+        "description": "Page title is missing",
+        "suggestion": "Add a descriptive title tag"
+      }
+    ],
+    "HIGH": [],
+    "MEDIUM": [],
+    "LOW": []
+  }
+}
+```
+</ResponseExample>
+
+<ResponseField name="audit_id" type="integer">
+  Audit ID
+</ResponseField>
+
+<ResponseField name="total_issues" type="integer">
+  Total number of issues
+</ResponseField>
+
+<ResponseField name="by_priority" type="object">
+  Issues grouped by priority (CRITICAL, HIGH, MEDIUM, LOW)
+</ResponseField>
+
+---
+
+## Error Codes
+
+<ResponseField name="404" type="error">
+  Audit or fix plan not found
+</ResponseField>
+
+<ResponseField name="500" type="error">
+  Internal server error
+</ResponseField>

@@ -1,0 +1,395 @@
+---
+title: Error Handling
+description: HTTP status codes and error response formats in the LatentGEO API
+---
+
+## Overview
+
+The LatentGEO API uses standard HTTP status codes to indicate the success or failure of requests. Error responses include detailed messages and, where applicable, additional context headers.
+
+## HTTP Status Codes
+
+| Status Code | Description | Common Scenarios |
+|-------------|-------------|------------------|
+| `200` | OK | Successful GET, PUT, PATCH, or DELETE request |
+| `201` | Created | Successful resource creation (POST) |
+| `400` | Bad Request | Invalid request payload, malformed JSON, invalid OAuth state |
+| `401` | Unauthorized | Missing, invalid, or expired authentication token; OAuth state-user mismatch |
+| `403` | Forbidden | Cross-user access denied, ownerless connection blocked in production |
+| `404` | Not Found | Requested resource does not exist |
+| `409` | Conflict | Resource conflict (e.g., active PDF generation lock) |
+| `422` | Unprocessable Entity | Validation errors, missing required fields, invalid field values |
+| `500` | Internal Server Error | Unexpected server error |
+| `503` | Service Unavailable | Service is unhealthy or temporarily unavailable |
+
+## Error Response Format
+
+### Standard Error Response
+
+Most errors return a JSON response with a `detail` field:
+
+```json
+{
+  "detail": "Human-readable error message"
+}
+```
+
+### Validation Error Response (422)
+
+Validation errors include detailed field-level information:
+
+```json
+{
+  "detail": [
+    {
+      "loc": ["body", "email"],
+      "msg": "field required",
+      "type": "value_error.missing"
+    },
+    {
+      "loc": ["body", "connection_id"],
+      "msg": "value is not a valid integer",
+      "type": "type_error.integer"
+    }
+  ]
+}
+```
+
+### Authentication Error Response (401)
+
+Authentication failures include a special header for error identification:
+
+```
+HTTP/1.1 401 Unauthorized
+WWW-Authenticate: Bearer
+X-Auth-Error-Code: expired_token
+Content-Type: application/json
+
+{
+  "detail": "Token expirado"
+}
+```
+
+## Common Error Scenarios
+
+### Authentication Failures (401)
+
+#### Missing Token
+
+**Request:**
+```bash
+curl http://localhost:8000/api/v1/github/connections
+```
+
+**Response:**
+```
+HTTP/1.1 401 Unauthorized
+X-Auth-Error-Code: missing_token
+
+{
+  "detail": "Token no proporcionado"
+}
+```
+
+#### Expired Token
+
+**Request:**
+```bash
+curl -H "Authorization: Bearer EXPIRED_TOKEN" \
+  http://localhost:8000/api/v1/github/connections
+```
+
+**Response:**
+```
+HTTP/1.1 401 Unauthorized
+X-Auth-Error-Code: expired_token
+
+{
+  "detail": "Token expirado"
+}
+```
+
+#### Invalid Signature
+
+**Request:**
+```bash
+curl -H "Authorization: Bearer INVALID_TOKEN" \
+  http://localhost:8000/api/v1/github/connections
+```
+
+**Response:**
+```
+HTTP/1.1 401 Unauthorized
+X-Auth-Error-Code: invalid_signature
+
+{
+  "detail": "Token inválido"
+}
+```
+
+#### Invalid Issuer
+
+**Request:**
+```bash
+curl -H "Authorization: Bearer TOKEN_FROM_WRONG_ISSUER" \
+  http://localhost:8000/api/v1/github/connections
+```
+
+**Response:**
+```
+HTTP/1.1 401 Unauthorized
+X-Auth-Error-Code: invalid_issuer
+
+{
+  "detail": "Issuer inválido"
+}
+```
+
+#### Missing Subject Claim
+
+**Request:**
+```bash
+curl -H "Authorization: Bearer TOKEN_WITHOUT_SUB" \
+  http://localhost:8000/api/v1/github/connections
+```
+
+**Response:**
+```
+HTTP/1.1 401 Unauthorized
+X-Auth-Error-Code: missing_sub
+
+{
+  "detail": "Token inválido: sin sub"
+}
+```
+
+#### JWKS Unavailable
+
+**Response:**
+```
+HTTP/1.1 401 Unauthorized
+X-Auth-Error-Code: jwks_unavailable
+
+{
+  "detail": "No se pudo obtener JWKS de Auth0"
+}
+```
+
+### Authorization Failures (403)
+
+#### Cross-User Access Denied
+
+**Scenario:** User attempts to access another user's connection.
+
+**Request:**
+```bash
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  http://localhost:8000/api/v1/hubspot/pages/OTHER_USER_CONNECTION_ID
+```
+
+**Response:**
+```
+HTTP/1.1 403 Forbidden
+
+{
+  "detail": "Access denied: resource belongs to another user"
+}
+```
+
+#### Ownerless Connection Blocked
+
+**Scenario:** In production mode, accessing a legacy connection without an owner.
+
+**Request:**
+```bash
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  http://localhost:8000/api/v1/github/sync/LEGACY_CONNECTION_ID
+```
+
+**Response:**
+```
+HTTP/1.1 403 Forbidden
+
+{
+  "detail": "Ownerless connections are blocked in production"
+}
+```
+
+### Bad Request (400)
+
+#### Invalid OAuth State
+
+**Scenario:** OAuth callback with expired or invalid state token.
+
+**Request:**
+```bash
+curl -X POST http://localhost:8000/api/v1/github/callback \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"code": "oauth_code", "state": "invalid_state"}'
+```
+
+**Response:**
+```
+HTTP/1.1 400 Bad Request
+
+{
+  "detail": "Invalid or expired OAuth state"
+}
+```
+
+#### Malformed JSON
+
+**Request:**
+```bash
+curl -X POST http://localhost:8000/api/v1/github/callback \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{invalid json}'
+```
+
+**Response:**
+```
+HTTP/1.1 400 Bad Request
+
+{
+  "detail": "Invalid JSON in request body"
+}
+```
+
+### Not Found (404)
+
+**Request:**
+```bash
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  http://localhost:8000/api/v1/github/repositories/99999
+```
+
+**Response:**
+```
+HTTP/1.1 404 Not Found
+
+{
+  "detail": "Connection not found"
+}
+```
+
+### Conflict (409)
+
+**Scenario:** Attempting to generate a PDF while another generation is in progress.
+
+**Request:**
+```bash
+curl -X POST http://localhost:8000/api/v1/reports/generate/AUDIT_ID \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+**Response:**
+```
+HTTP/1.1 409 Conflict
+
+{
+  "detail": "PDF generation already in progress for this audit"
+}
+```
+
+### Validation Error (422)
+
+**Request:**
+```bash
+curl -X POST http://localhost:8000/api/v1/github/create-pr \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "connection_id": "not_a_number",
+    "title": ""
+  }'
+```
+
+**Response:**
+```
+HTTP/1.1 422 Unprocessable Entity
+
+{
+  "detail": [
+    {
+      "loc": ["body", "connection_id"],
+      "msg": "value is not a valid integer",
+      "type": "type_error.integer"
+    },
+    {
+      "loc": ["body", "title"],
+      "msg": "ensure this value has at least 1 characters",
+      "type": "value_error.any_str.min_length",
+      "ctx": {"limit_value": 1}
+    },
+    {
+      "loc": ["body", "description"],
+      "msg": "field required",
+      "type": "value_error.missing"
+    }
+  ]
+}
+```
+
+### Internal Server Error (500)
+
+**Response:**
+```
+HTTP/1.1 500 Internal Server Error
+
+{
+  "detail": "Internal server error"
+}
+```
+
+### Service Unavailable (503)
+
+**Scenario:** Database connection is down.
+
+**Request:**
+```bash
+curl http://localhost:8000/health
+```
+
+**Response:**
+```
+HTTP/1.1 503 Service Unavailable
+
+{
+  "status": "unhealthy",
+  "services": {
+    "database": "disconnected",
+    "redis": "connected"
+  }
+}
+```
+
+## Authentication Error Codes
+
+The `X-Auth-Error-Code` header provides machine-readable error identification:
+
+| Error Code | Description |
+|------------|-------------|
+| `missing_token` | No Authorization header provided |
+| `expired_token` | JWT has expired (exp claim) |
+| `invalid_signature` | Token signature verification failed or missing kid |
+| `invalid_issuer` | Issuer claim doesn't match Auth0 domain |
+| `invalid_audience` | Audience claim doesn't match API audience |
+| `missing_sub` | Token missing required sub claim |
+| `jwks_unavailable` | Unable to fetch or validate JWKS from Auth0 |
+| `invalid_client` | Client ID doesn't match expected value |
+
+## Best Practices
+
+1. **Check status codes** - Always check the HTTP status code before parsing response body
+2. **Handle auth errors** - Use `X-Auth-Error-Code` header for specific authentication error handling
+3. **Parse validation errors** - For 422 responses, iterate through the `detail` array for field-specific errors
+4. **Retry logic** - Implement exponential backoff for 500 and 503 errors
+5. **User-friendly messages** - Map technical error codes to user-friendly messages in your UI
+6. **Log errors** - Log full error responses for debugging, including headers and response body
+7. **Monitor error rates** - Track error rates by status code to identify systemic issues
+
+## Error Monitoring
+
+In production, errors are automatically reported to Sentry when `SENTRY_DSN` is configured. Authentication failures are also logged with counters for security monitoring.

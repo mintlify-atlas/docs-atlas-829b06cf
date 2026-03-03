@@ -1,0 +1,258 @@
+---
+title: HubSpot Integration
+description: Connect HubSpot CMS and apply SEO recommendations
+---
+
+## OAuth Flow
+
+### Get Authorization URL
+
+**GET** `/api/v1/hubspot/auth-url`
+
+Returns HubSpot OAuth authorization URL and signed state token.
+
+<ResponseField name="url" type="string">
+  HubSpot OAuth URL
+</ResponseField>
+
+<ResponseField name="state" type="string">
+  Signed state token (expires in 10 minutes)
+</ResponseField>
+
+---
+
+### OAuth Callback
+
+**POST** `/api/v1/hubspot/callback`
+
+Handles OAuth callback and creates/updates connection.
+
+<ParamField body="code" type="string" required>
+  OAuth authorization code
+</ParamField>
+
+<ParamField body="state" type="string" required>
+  Signed state token
+</ParamField>
+
+<ResponseField name="status" type="string">
+  Connection status
+</ResponseField>
+
+<ResponseField name="connection_id" type="string">
+  HubSpot connection ID
+</ResponseField>
+
+<ResponseField name="portal_id" type="string">
+  HubSpot portal ID
+</ResponseField>
+
+---
+
+## Connections
+
+### List Connections
+
+**GET** `/api/v1/hubspot/connections`
+
+Returns your active HubSpot connections.
+
+<ResponseField name="connections" type="array">
+  Array of connection objects
+</ResponseField>
+
+---
+
+### Sync Pages
+
+**POST** `/api/v1/hubspot/sync/{connection_id}`
+
+Synchronizes HubSpot CMS pages for a connection.
+
+<ResponseField name="status" type="string">
+  Sync status
+</ResponseField>
+
+<ResponseField name="synced_count" type="integer">
+  Number of pages synced
+</ResponseField>
+
+---
+
+## Pages
+
+### List Pages
+
+**GET** `/api/v1/hubspot/pages/{connection_id}`
+
+Returns synchronized HubSpot pages.
+
+<RequestExample>
+```bash cURL
+curl -X GET https://api.latentgeo.com/api/v1/hubspot/pages/conn_123 \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+</RequestExample>
+
+<ResponseExample>
+```json
+[
+  {
+    "id": "page_123",
+    "hubspot_id": "12345678",
+    "title": "Product Page",
+    "url": "https://example.com/products",
+    "meta_description": "Shop our products",
+    "html_title": "Products | Example",
+    "connection_id": "conn_123",
+    "created_at": "2026-03-03T10:00:00Z"
+  }
+]
+```
+</ResponseExample>
+
+<ResponseField name="pages" type="array">
+  Array of HubSpot page objects
+</ResponseField>
+
+---
+
+## Recommendations
+
+### Get Recommendations
+
+**GET** `/api/v1/hubspot/recommendations/{audit_id}`
+
+Generates SEO recommendations for HubSpot pages based on an audit.
+
+<ResponseField name="recommendations" type="array">
+  Array of recommendation objects
+</ResponseField>
+
+<Expandable title="Recommendation Object">
+  <ResponseField name="id" type="string">
+    Recommendation ID
+  </ResponseField>
+
+  <ResponseField name="hubspot_page_id" type="string">
+    HubSpot page ID
+  </ResponseField>
+
+  <ResponseField name="page_url" type="string">
+    Page URL
+  </ResponseField>
+
+  <ResponseField name="field" type="string">
+    Field to update (meta_description, html_title, etc.)
+  </ResponseField>
+
+  <ResponseField name="current_value" type="string">
+    Current field value
+  </ResponseField>
+
+  <ResponseField name="recommended_value" type="string">
+    Recommended new value
+  </ResponseField>
+
+  <ResponseField name="priority" type="string">
+    Priority level (high, medium, low)
+  </ResponseField>
+
+  <ResponseField name="auto_fixable" type="boolean">
+    Whether fix can be applied automatically
+  </ResponseField>
+
+  <ResponseField name="issue_type" type="string">
+    Issue description
+  </ResponseField>
+</Expandable>
+
+---
+
+### Apply Recommendations
+
+**POST** `/api/v1/hubspot/apply-recommendations`
+
+Applies a batch of recommendations to HubSpot pages.
+
+<RequestExample>
+```bash cURL
+curl -X POST https://api.latentgeo.com/api/v1/hubspot/apply-recommendations \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "audit_id": 123,
+    "recommendations": [
+      {
+        "hubspot_page_id": "12345678",
+        "field": "meta_description",
+        "recommended_value": "Optimized meta description"
+      }
+    ]
+  }'
+```
+</RequestExample>
+
+<ParamField body="audit_id" type="integer" required>
+  Audit ID
+</ParamField>
+
+<ParamField body="recommendations" type="array" required>
+  Array of recommendations to apply
+</ParamField>
+
+<ResponseField name="status" type="string">
+  Batch operation status
+</ResponseField>
+
+<ResponseField name="applied" type="integer">
+  Number of recommendations applied
+</ResponseField>
+
+<ResponseField name="failed" type="integer">
+  Number of failed recommendations
+</ResponseField>
+
+<ResponseField name="details" type="object">
+  Detailed results by page
+</ResponseField>
+
+---
+
+### Rollback Change
+
+**POST** `/api/v1/hubspot/rollback/{change_id}`
+
+Reverts a previously applied change.
+
+<ResponseField name="status" type="string">
+  Rollback status
+</ResponseField>
+
+<ResponseField name="new_change_id" type="string">
+  ID of the rollback change record
+</ResponseField>
+
+---
+
+## Error Codes
+
+<ResponseField name="400" type="error">
+  Invalid OAuth callback or change cannot be rolled back
+</ResponseField>
+
+<ResponseField name="401" type="error">
+  Invalid OAuth state
+</ResponseField>
+
+<ResponseField name="403" type="error">
+  Cross-user access denied or legacy ownerless connection blocked
+</ResponseField>
+
+<ResponseField name="404" type="error">
+  Page or change not found
+</ResponseField>
+
+<ResponseField name="500" type="error">
+  Internal server error
+</ResponseField>

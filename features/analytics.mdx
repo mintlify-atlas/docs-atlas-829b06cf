@@ -1,0 +1,592 @@
+---
+title: "Analytics"
+description: "Track SEO/GEO performance, monitor competitor rankings, and gain actionable insights from comprehensive analytics dashboards"
+---
+
+## Overview
+
+The Analytics system provides comprehensive insights into your SEO and GEO performance. Track key metrics, compare against competitors, monitor keyword rankings, and measure your visibility in AI-powered search engines.
+
+## Dashboard Features
+
+### Executive Summary
+
+The main dashboard provides at-a-glance metrics:
+
+```json
+{
+  "summary": {
+    "total_audits": 45,
+    "completed_audits": 38,
+    "running_audits": 4,
+    "failed_audits": 3,
+    "success_rate": 84.44
+  },
+  "metrics": {
+    "unique_domains": 12,
+    "total_issues": 487,
+    "average_issues_per_audit": 12.8
+  }
+}
+```
+
+### Key Performance Indicators (KPIs)
+
+#### Audit Success Rate
+
+Percentage of audits completed successfully:
+- **Target**: &gt;90%
+- **Good**: 80-90%
+- **Poor**: &lt;80%
+
+#### Average Issues per Audit
+
+Mean number of identified issues across audits:
+- **Excellent**: &lt;10 issues
+- **Good**: 10-25 issues
+- **Needs Work**: 25-50 issues
+- **Critical**: >50 issues
+
+#### GEO Score Trend
+
+Track improvement over time:
+- **Scale**: 0-10 (10 = perfect GEO optimization)
+- **Target**: >7.0
+- **Minimum**: >5.0
+
+## Audit Analytics
+
+### Detailed Audit Metrics
+
+```bash
+GET /api/v1/analytics/audit/{audit_id}
+```
+
+**Response:**
+
+```json
+{
+  "audit_id": 123,
+  "domain": "example.com",
+  "total_pages": 45,
+  "is_ymyl": false,
+  "category": "Software",
+  "issues": {
+    "critical": 3,
+    "high": 8,
+    "medium": 15,
+    "low": 22,
+    "total": 48
+  },
+  "scores": {
+    "h1_score": 8.2,
+    "structure_score": 7.5,
+    "content_score": 6.8,
+    "eeat_score": 7.0,
+    "schema_score": 5.5,
+    "overall_score": 7.0
+  },
+  "pages": [
+    {
+      "url": "https://example.com/products",
+      "path": "/products",
+      "overall_score": 7.5,
+      "issues": {
+        "critical": 0,
+        "high": 2,
+        "medium": 3,
+        "low": 5
+      }
+    }
+  ]
+}
+```
+
+### Score Breakdown
+
+Each score represents a specific aspect of optimization:
+
+#### H1 Score (0-10)
+
+Evaluates heading structure:
+- Single, descriptive H1
+- Logical H2-H6 hierarchy
+- Keyword inclusion
+- Length appropriateness
+
+#### Structure Score (0-10)
+
+Measures HTML semantic quality:
+- Proper HTML5 tags
+- Accessibility features
+- Mobile responsiveness
+- Clean markup
+
+#### Content Score (0-10)
+
+Assesses content quality:
+- Readability level
+- Keyword optimization
+- Content depth
+- Originality
+
+#### E-E-A-T Score (0-10)
+
+Evaluates authority signals:
+- Author credentials
+- External citations
+- Trust indicators
+- Expertise demonstration
+
+#### Schema Score (0-10)
+
+Measures structured data:
+- Schema presence
+- Schema validity
+- Appropriate schema types
+- Complete implementations
+
+### Issue Distribution
+
+Visualize issues by severity:
+
+```typescript
+interface IssueDistribution {
+  critical: number;  // Requires immediate action
+  high: number;      // Important optimization
+  medium: number;    // Recommended improvement
+  low: number;       // Nice-to-have enhancement
+}
+```
+
+## Competitor Analysis
+
+### Competitive Benchmarking
+
+```bash
+GET /api/v1/analytics/competitors/{audit_id}
+```
+
+**Response:**
+
+```json
+{
+  "audit_id": 123,
+  "total_competitors": 5,
+  "your_geo_score": 7.2,
+  "average_competitor_score": 6.8,
+  "position": "Por encima del promedio",
+  "competitors": [
+    {
+      "domain": "competitor1.com",
+      "url": "https://competitor1.com",
+      "geo_score": 8.5
+    },
+    {
+      "domain": "competitor2.com",
+      "url": "https://competitor2.com",
+      "geo_score": 7.2
+    }
+  ],
+  "identified_gaps": [
+    "Schema faltante: Product, FAQPage",
+    "Lower citation rate in AI responses",
+    "Missing author credentials on articles"
+  ]
+}
+```
+
+### Gap Analysis
+
+Identify areas where competitors outperform:
+
+- **Schema Types**: Missing structured data
+- **Content Depth**: Shorter articles or fewer pages
+- **Backlink Profile**: Fewer high-authority links
+- **Citation Rate**: Lower LLM visibility
+- **Technical Issues**: More critical problems
+
+### Competitive Position
+
+Your ranking compared to competitors:
+- **Leader**: Top 20% of GEO scores
+- **Por encima del promedio**: Above median
+- **Por debajo del promedio**: Below median
+- **Needs Improvement**: Bottom 20%
+
+## Keyword Tracking
+
+### Rank Monitoring
+
+Track keyword positions over time:
+
+```typescript
+interface KeywordMetrics {
+  keyword: string;
+  volume: number;           // Monthly search volume
+  difficulty: number;       // 0-100 difficulty score
+  position: number;         // Current ranking (1-100+)
+  position_change: number;  // Change from last check
+  url: string;             // Ranking page URL
+  last_checked: string;    // ISO timestamp
+}
+```
+
+### Keyword Opportunities
+
+Identify high-potential keywords:
+
+| Priority | Criteria |
+|----------|----------|
+| **High** | High volume, low difficulty, position 11-20 |
+| **Medium** | Medium volume, medium difficulty, position 21-50 |
+| **Low** | Low volume or high difficulty |
+
+### Position Distribution
+
+Track rankings across ranges:
+
+```json
+{
+  "rank_distribution": {
+    "top_3": 5,      // Page 1, positions 1-3
+    "top_10": 12,    // Page 1, positions 1-10
+    "top_20": 18,    // Positions 11-20
+    "top_50": 25,    // Positions 21-50
+    "beyond_50": 10  // Position 51+
+  },
+  "trend": "stable",  // "improving", "stable", "declining"
+  "average_position": 15.3
+}
+```
+
+## Backlink Analysis
+
+### Link Profile Metrics
+
+```typescript
+interface BacklinkProfile {
+  total_backlinks: number;
+  referring_domains: number;
+  dofollow_links: number;
+  nofollow_links: number;
+  average_domain_authority: number;
+  top_backlinks: TopBacklink[];
+}
+
+interface TopBacklink {
+  source_url: string;
+  source_domain: string;
+  domain_authority: number;  // 0-100
+  target_url: string;
+  anchor_text: string;
+  link_type: 'dofollow' | 'nofollow';
+  first_seen: string;
+}
+```
+
+### Example Top Backlinks
+
+| Source | DA | Target | Anchor Text |
+|--------|----|---------|--------------|
+| techcrunch.com/article | 92 | / | "innovative SEO platform" |
+| businessinsider.com/list | 88 | /blog | "GEO optimization guide" |
+| searchengineland.com | 87 | /features | "AI-powered audits" |
+
+### Link Quality Score
+
+Composite metric (0-100):
+- **90-100**: Excellent - High DA, relevant sources
+- **70-89**: Good - Quality links, some improvements
+- **50-69**: Fair - Mixed quality, needs work
+- **0-49**: Poor - Low quality or spammy links
+
+## LLM Visibility Metrics
+
+### Citation Tracking
+
+Monitor brand mentions in AI responses:
+
+```json
+{
+  "llm_visibility": {
+    "total_queries_tested": 50,
+    "total_mentions": 18,
+    "citation_rate": 36.0,
+    "by_llm": {
+      "chatgpt": {
+        "mentions": 8,
+        "citation_rate": 40.0,
+        "average_position": 2.3
+      },
+      "gemini": {
+        "mentions": 5,
+        "citation_rate": 25.0,
+        "average_position": 3.1
+      },
+      "perplexity": {
+        "mentions": 5,
+        "citation_rate": 25.0,
+        "average_position": 2.8
+      }
+    },
+    "sentiment_breakdown": {
+      "positive": 12,
+      "neutral": 5,
+      "negative": 1
+    }
+  }
+}
+```
+
+### Visibility Trends
+
+Track citation rate over time:
+
+```typescript
+interface CitationTrend {
+  month: string;           // "March", "April", etc.
+  year: number;
+  citations: number;       // Total citations
+  queries_tracked: number; // Queries tested
+  citation_rate: number;   // Percentage
+  top_queries: string[];   // Queries where cited
+}
+```
+
+### LLM Comparison
+
+Compare visibility across AI platforms:
+
+| LLM | Citation Rate | Avg Position | Trend |
+|-----|--------------|--------------|-------|
+| ChatGPT | 40% | 2.3 | ↑ +5% |
+| Gemini | 25% | 3.1 | → Stable |
+| Perplexity | 25% | 2.8 | ↑ +3% |
+
+## Issues Analysis
+
+### Issues by Priority
+
+```bash
+GET /api/v1/analytics/issues/{audit_id}
+```
+
+**Response:**
+
+```json
+{
+  "audit_id": 123,
+  "total_issues": 48,
+  "by_priority": {
+    "CRITICAL": [
+      {
+        "page_path": "/products/widget",
+        "issue_code": "MISSING_H1",
+        "description": "Page missing H1 heading",
+        "suggestion": "Add descriptive H1 with primary keyword"
+      }
+    ],
+    "HIGH": [
+      {
+        "page_path": "/blog/article",
+        "issue_code": "NO_AUTHOR_INFO",
+        "description": "Author information not found",
+        "suggestion": "Add author bio with credentials"
+      }
+    ],
+    "MEDIUM": [...],
+    "LOW": [...]
+  }
+}
+```
+
+### Common Issue Codes
+
+#### Critical Issues
+
+- `MISSING_H1`: No H1 heading on page
+- `DUPLICATE_H1`: Multiple H1 tags
+- `NO_TITLE`: Missing page title
+- `NO_META_DESCRIPTION`: Missing meta description
+- `BROKEN_SCHEMA`: Invalid schema markup
+
+#### High Priority Issues
+
+- `NO_AUTHOR_INFO`: Missing author attribution
+- `WEAK_EEAT`: Poor authority signals
+- `NO_SCHEMA`: No structured data
+- `THIN_CONTENT`: Content too short
+- `NO_ALT_TEXT`: Images missing alt text
+
+#### Medium Priority Issues
+
+- `SUBOPTIMAL_H_STRUCTURE`: Heading hierarchy issues
+- `NO_INTERNAL_LINKS`: Insufficient internal linking
+- `SLOW_LOAD_TIME`: PageSpeed issues
+- `NO_FAQ_SCHEMA`: Missing FAQ markup
+- `LIMITED_EXTERNAL_LINKS`: Few authority citations
+
+## Performance Insights
+
+### PageSpeed Metrics
+
+Core Web Vitals analysis:
+
+```typescript
+interface WebVitals {
+  lcp: {
+    mobile: number;   // Largest Contentful Paint (seconds)
+    desktop: number;
+    status: 'good' | 'needs-improvement' | 'poor';
+  };
+  inp: {
+    mobile: number;   // Interaction to Next Paint (ms)
+    desktop: number;
+    status: 'good' | 'needs-improvement' | 'poor';
+  };
+  cls: {
+    mobile: number;   // Cumulative Layout Shift
+    desktop: number;
+    status: 'good' | 'needs-improvement' | 'poor';
+  };
+  performance_score: {
+    mobile: number;   // 0-100
+    desktop: number;
+  };
+}
+```
+
+### Opportunities
+
+Ranked by potential impact:
+
+```json
+{
+  "opportunities": [
+    {
+      "title": "Defer offscreen images",
+      "estimated_savings": "1.5s",
+      "impact": "High"
+    },
+    {
+      "title": "Remove unused JavaScript",
+      "estimated_savings": "0.8s",
+      "impact": "Medium"
+    },
+    {
+      "title": "Optimize web fonts",
+      "estimated_savings": "0.3s",
+      "impact": "Low"
+    }
+  ]
+}
+```
+
+## Report Generation
+
+### Automated Reporting
+
+Generate comprehensive PDF reports including:
+
+✓ Executive summary with key metrics  
+✓ Technical SEO findings  
+✓ PageSpeed analysis (mobile + desktop)  
+✓ Competitor comparison  
+✓ Keyword rankings  
+✓ Backlink profile  
+✓ LLM visibility metrics  
+✓ Actionable recommendations  
+✓ Implementation timeline  
+
+### Report Structure
+
+Based on EXAMPLE_REPORT_V11.md format:
+
+1. **Executive Summary**: High-level overview
+2. **Methodology**: Analysis approach
+3. **Performance Analysis**: PageSpeed, CWV
+4. **Technical Diagnosis**: SEO issues
+5. **Visibility Analysis**: Keywords, rankings
+6. **Backlink Profile**: Link analysis
+7. **LLM Visibility**: AI citations
+8. **Content Roadmap**: Recommendations
+9. **Competitive Strategy**: Positioning
+10. **Implementation Plan**: Action items
+
+## API Endpoints
+
+### Analytics Dashboard
+
+```bash
+# Main dashboard
+GET /api/v1/analytics/dashboard
+
+# Audit analytics
+GET /api/v1/analytics/audit/{audit_id}
+
+# Competitor analysis
+GET /api/v1/analytics/competitors/{audit_id}
+
+# Issues breakdown
+GET /api/v1/analytics/issues/{audit_id}
+```
+
+### GEO Dashboard
+
+```bash
+# Complete GEO overview
+GET /api/v1/geo/dashboard/{audit_id}
+```
+
+Consolidates:
+- Citation tracking
+- Query opportunities
+- Competitor benchmark
+- Commerce analysis
+- Article generation status
+
+## Best Practices
+
+### Monitoring Frequency
+
+- **Daily**: LLM citation tracking
+- **Weekly**: Keyword rankings
+- **Monthly**: Competitor analysis
+- **Quarterly**: Comprehensive audits
+
+### Metric Priorities
+
+Focus on metrics that drive business goals:
+
+1. **Lead Gen Sites**: Citation rate, keyword rankings
+2. **E-commerce**: Conversion-focused keywords, product schema
+3. **Content Sites**: Backlink growth, authority scores
+4. **SaaS**: Brand mentions in LLMs, competitor positioning
+
+### Action Thresholds
+
+| Metric | Threshold | Action |
+|--------|-----------|--------|
+| GEO Score | &lt;5.0 | Urgent optimization needed |
+| Citation Rate | &lt;20% | Improve GEO structure |
+| Critical Issues | &gt;5 | Immediate technical fixes |
+| PageSpeed Mobile | &lt;50 | Performance optimization |
+| Competitor Gap | &gt;2.0 points | Strategic review |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Audits" icon="magnifying-glass" href="/features/audits">
+    Run comprehensive audits
+  </Card>
+  <Card title="GEO Optimization" icon="sparkles" href="/features/geo-optimization">
+    Improve GEO scores
+  </Card>
+  <Card title="AI Content Generation" icon="wand-magic-sparkles" href="/features/ai-content-generation">
+    Create optimized content
+  </Card>
+  <Card title="Real-time Monitoring" icon="signal-stream" href="/features/real-time-monitoring">
+    Track progress live
+  </Card>
+</CardGroup>

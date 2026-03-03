@@ -1,0 +1,396 @@
+---
+title: GEO Features
+description: Generative Engine Optimization tools and analytics
+---
+
+## Citation Tracking
+
+### Start Citation Tracking
+
+**POST** `/api/v1/geo/citation-tracking/start`
+
+Initiates citation tracking for an audit across LLMs.
+
+<ParamField body="audit_id" type="integer" required>
+  Audit ID to track
+</ParamField>
+
+<ParamField body="industry" type="string" default="general">
+  Industry vertical
+</ParamField>
+
+<ParamField body="keywords" type="array">
+  Keywords to track citations for
+</ParamField>
+
+<ParamField body="llm_name" type="string" default="kimi">
+  LLM to query (kimi, chatgpt, perplexity)
+</ParamField>
+
+---
+
+### Get Citation History
+
+**GET** `/api/v1/geo/citation-tracking/history/{audit_id}`
+
+Returns historical citation data.
+
+<ParamField query="days" type="integer" default="30">
+  Number of days of history
+</ParamField>
+
+---
+
+### Get Recent Citations
+
+**GET** `/api/v1/geo/citation-tracking/recent/{audit_id}`
+
+Returns recent citations where your brand was mentioned.
+
+<ParamField query="limit" type="integer" default="10">
+  Maximum citations to return
+</ParamField>
+
+---
+
+## Query Discovery
+
+### Discover Queries
+
+**POST** `/api/v1/geo/query-discovery/discover`
+
+Discovers relevant search queries for your niche.
+
+<ParamField body="brand_name" type="string" required>
+  Brand name
+</ParamField>
+
+<ParamField body="domain" type="string" required>
+  Domain name
+</ParamField>
+
+<ParamField body="industry" type="string" required>
+  Industry category
+</ParamField>
+
+<ParamField body="keywords" type="array" required>
+  Seed keywords
+</ParamField>
+
+<ResponseField name="total_discovered" type="integer">
+  Total queries discovered
+</ResponseField>
+
+<ResponseField name="queries" type="array">
+  Array of discovered query objects
+</ResponseField>
+
+---
+
+### Get Query Opportunities
+
+**GET** `/api/v1/geo/query-discovery/opportunities/{audit_id}`
+
+Returns top query opportunities ranked by potential.
+
+<ParamField query="limit" type="integer" default="10">
+  Maximum opportunities to return
+</ParamField>
+
+---
+
+## Competitor Analysis
+
+### Analyze Competitor Citations
+
+**POST** `/api/v1/geo/competitor-analysis/analyze`
+
+Analyzes competitor citation patterns across LLMs.
+
+<ParamField body="audit_id" type="integer" required>
+  Audit ID
+</ParamField>
+
+<ParamField body="competitor_domains" type="array" required>
+  List of competitor domains
+</ParamField>
+
+<ParamField body="queries" type="array" required>
+  Queries to analyze
+</ParamField>
+
+---
+
+### Get Citation Benchmark
+
+**GET** `/api/v1/geo/competitor-analysis/benchmark/{audit_id}`
+
+Returns citation benchmark comparing your brand against competitors.
+
+<ResponseField name="has_data" type="boolean">
+  Whether benchmark data exists
+</ResponseField>
+
+<ResponseField name="your_mentions" type="integer">
+  Your brand mention count
+</ResponseField>
+
+<ResponseField name="competitors" type="array">
+  Competitor benchmark data
+</ResponseField>
+
+<ResponseField name="gap_analysis" type="object">
+  Gap analysis results
+</ResponseField>
+
+---
+
+## Schema Optimizer
+
+### Generate Schema
+
+**POST** `/api/v1/geo/schema/generate`
+
+Generates optimized Schema.org markup for a page.
+
+<ParamField body="html_content" type="string">
+  HTML content of the page
+</ParamField>
+
+<ParamField body="url" type="string" required>
+  Page URL
+</ParamField>
+
+<ParamField body="page_type" type="string">
+  Page type (Article, Product, etc.)
+</ParamField>
+
+<ResponseField name="page_type" type="string">
+  Detected or specified page type
+</ResponseField>
+
+<ResponseField name="implementation_code" type="string">
+  Generated schema JSON-LD
+</ResponseField>
+
+---
+
+### Generate Multiple Schemas
+
+**POST** `/api/v1/geo/schema/multiple`
+
+Generates multiple schema types if the page supports them.
+
+<ResponseField name="total_schemas" type="integer">
+  Number of schemas generated
+</ResponseField>
+
+<ResponseField name="schemas" type="array">
+  Array of schema objects
+</ResponseField>
+
+---
+
+## Content Templates
+
+### List Templates
+
+**GET** `/api/v1/geo/content-templates/list`
+
+Returns all available GEO content templates.
+
+<ResponseField name="total_templates" type="integer">
+  Number of templates
+</ResponseField>
+
+<ResponseField name="templates" type="array">
+  Template objects
+</ResponseField>
+
+---
+
+### Generate Template
+
+**POST** `/api/v1/geo/content-templates/generate`
+
+Generates a customized content template.
+
+<ParamField body="template_type" type="string" required>
+  Template type (guide, comparison, faq, listicle, tutorial)
+</ParamField>
+
+<ParamField body="topic" type="string" required>
+  Content topic
+</ParamField>
+
+<ParamField body="keywords" type="array" required>
+  Target keywords
+</ParamField>
+
+---
+
+### Analyze Content
+
+**POST** `/api/v1/geo/content-templates/analyze`
+
+Analyzes existing content for GEO readiness.
+
+<ParamField body="content" type="string" required>
+  Content to analyze
+</ParamField>
+
+<ResponseField name="score" type="integer">
+  GEO readiness score (0-100)
+</ResponseField>
+
+<ResponseField name="strengths" type="array">
+  Content strengths
+</ResponseField>
+
+<ResponseField name="improvements" type="array">
+  Suggested improvements
+</ResponseField>
+
+---
+
+## Commerce Query Analyzer
+
+### Analyze Commerce Query
+
+**POST** `/api/v1/geo/commerce-query/analyze`
+
+Analyzes a commerce query using Kimi 2.5 search.
+
+<ParamField body="audit_id" type="integer" required>
+  Audit ID
+</ParamField>
+
+<ParamField body="query" type="string" required>
+  Commerce query to analyze
+</ParamField>
+
+<ParamField body="market" type="string" required>
+  Market code (AR, US, MX, etc.)
+</ParamField>
+
+<ParamField body="top_k" type="integer" default="10">
+  Number of results to analyze (1-20)
+</ParamField>
+
+<ResponseField name="analysis_id" type="integer">
+  Analysis ID
+</ResponseField>
+
+<ResponseField name="target_position" type="integer">
+  Your domain's position in results
+</ResponseField>
+
+<ResponseField name="top_result" type="object">
+  Top ranking result details
+</ResponseField>
+
+<ResponseField name="why_not_first" type="array">
+  Reasons why you're not #1
+</ResponseField>
+
+<ResponseField name="action_plan" type="array">
+  Actionable steps to improve ranking
+</ResponseField>
+
+---
+
+## Article Engine
+
+### Generate Article Batch
+
+**POST** `/api/v1/geo/article-engine/generate`
+
+Generates a batch of GEO-optimized articles.
+
+<ParamField body="audit_id" type="integer" required>
+  Audit ID
+</ParamField>
+
+<ParamField body="article_count" type="integer" default="3">
+  Number of articles (1-12)
+</ParamField>
+
+<ParamField body="language" type="string" default="en">
+  Content language
+</ParamField>
+
+<ParamField body="tone" type="string" default="executive">
+  Content tone
+</ParamField>
+
+<ParamField body="include_schema" type="boolean" default="true">
+  Include schema markup
+</ParamField>
+
+<ParamField body="run_async" type="boolean" default="true">
+  Run asynchronously
+</ParamField>
+
+<ResponseField name="batch_id" type="integer">
+  Article batch ID
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Batch status (pending, processing, completed, failed)
+</ResponseField>
+
+---
+
+### Get Article Batch Status
+
+**GET** `/api/v1/geo/article-engine/status/{batch_id}`
+
+Returns the status of an article generation batch.
+
+---
+
+## GEO Dashboard
+
+**GET** `/api/v1/geo/dashboard/{audit_id}`
+
+Returns a comprehensive GEO dashboard with all features.
+
+<ResponseField name="citation_tracking" type="object">
+  Citation metrics and rates
+</ResponseField>
+
+<ResponseField name="top_opportunities" type="array">
+  Query opportunities
+</ResponseField>
+
+<ResponseField name="competitor_benchmark" type="object">
+  Competitor comparison data
+</ResponseField>
+
+<ResponseField name="commerce_campaign" type="object">
+  Latest commerce campaign data
+</ResponseField>
+
+<ResponseField name="article_engine" type="object">
+  Latest article batch data
+</ResponseField>
+
+---
+
+## Error Codes
+
+<ResponseField name="400" type="error">
+  Invalid input parameters
+</ResponseField>
+
+<ResponseField name="422" type="error">
+  Article data pack incomplete or insufficient authority sources
+</ResponseField>
+
+<ResponseField name="502" type="error">
+  Kimi generation failed
+</ResponseField>
+
+<ResponseField name="503" type="error">
+  Kimi service unavailable
+</ResponseField>

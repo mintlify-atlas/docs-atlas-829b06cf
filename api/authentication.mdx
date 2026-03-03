@@ -1,0 +1,208 @@
+---
+title: Authentication
+description: JWT bearer authentication for LatentGEO API access
+---
+
+## Overview
+
+Most LatentGEO API endpoints require JWT (JSON Web Token) bearer authentication. The API validates tokens using Auth0 RS256 signatures in production, with an internal HS256 fallback for test environments.
+
+## JWT Bearer Authentication
+
+Include your JWT token in the `Authorization` header of each request:
+
+```bash
+curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  http://localhost:8000/api/v1/github/connections
+```
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token for authentication. Format: `Bearer <token>`
+</ParamField>
+
+## Required JWT Claims
+
+The LatentGEO backend expects the following claims in your JWT:
+
+<ParamField body="sub" type="string" required>
+  Subject claim containing the internal user ID. This is the primary identifier for the authenticated user.
+</ParamField>
+
+<ParamField body="email" type="string">
+  User's email address. Can also be provided as `user_email`. Used for ownership checks and audit trails. Automatically normalized to lowercase.
+</ParamField>
+
+<ParamField body="iss" type="string" required>
+  Issuer claim. Must match the configured Auth0 domain/issuer URL in production.
+</ParamField>
+
+<ParamField body="aud" type="string" required>
+  Audience claim. Must match the configured Auth0 API audience in production.
+</ParamField>
+
+<ParamField body="exp" type="number" required>
+  Expiration timestamp (Unix epoch). Tokens past this time are rejected.
+</ParamField>
+
+### Production Token Validation
+
+In production environments, the API performs strict RS256 validation:
+
+1. **Issuer verification** - Token `iss` claim must match your Auth0 domain
+2. **Audience verification** - Token `aud` claim must match the configured API audience
+3. **Signature verification** - Token must be signed by Auth0 using RS256
+4. **JWKS validation** - Public key is fetched from Auth0's JWKS endpoint and cached
+5. **Expiration check** - Token `exp` claim must be in the future
+6. **Required claims** - Token must contain `sub`, `iss`, `aud`, and `exp` claims
+
+Optional: If `AUTH0_EXPECTED_CLIENT_ID` is configured, the token's `azp` or `client_id` claim must match.
+
+### Test Environment Compatibility
+
+In test environments, the API accepts internal HS256 tokens for unit testing stability. This mode is enabled when:
+
+- `ENVIRONMENT=test`, or
+- `PYTEST_CURRENT_TEST` environment variable is set, or
+- `ALLOW_INTERNAL_TEST_JWT=true` is set
+
+## Ownership and Access Control
+
+### Resource Ownership
+
+GitHub and HubSpot connections are user-owned resources identified by:
+
+- `owner_user_id` - Matches the JWT `sub` claim
+- `owner_email` - Matches the JWT `email` or `user_email` claim
+
+Users can only access their own connections. Cross-user access attempts result in a `403 Forbidden` response.
+
+### Legacy Policy
+
+In debug mode (`DEBUG=true`), the first authenticated user to access an ownerless legacy connection automatically claims ownership. In production mode (`DEBUG=false`), ownerless connections are blocked with a `403 Forbidden` response.
+
+## OAuth Security Contract
+
+GitHub and HubSpot OAuth flows require an authenticated user for both initialization and callback.
+
+### OAuth Initialization
+
+Request an OAuth authorization URL:
+
+```bash
+curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  http://localhost:8000/api/v1/github/auth-url
+```
+
+**Response:**
+
+```json
+{
+  "url": "https://github.com/login/oauth/authorize?client_id=...&state=...",
+  "state": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
+
+The `state` token is:
+
+- **Signed** using HS256 with your backend secret
+- **Time-limited** (default: 10 minutes)
+- **User-bound** to the authenticated user's `sub` claim
+
+Redirect the user to the returned `url` to begin the OAuth flow.
+
+### OAuth Callback
+
+After the user authorizes, handle the OAuth callback:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/github/callback \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "code": "oauth_code_from_provider",
+    "state": "signed_state_from_init"
+  }'
+```
+
+**Security validations:**
+
+1. Bearer token must be present and valid
+2. State token must be valid and not expired
+3. State token's embedded user ID must match the bearer token's `sub` claim
+
+**Error responses:**
+
+- `400 Bad Request` - Invalid or expired state token
+- `401 Unauthorized` - User mismatch between state and bearer token
+- `403 Forbidden` - Ownership violation
+
+## Authentication Errors
+
+Authentication failures return `401 Unauthorized` with a custom header:
+
+```
+HTTP/1.1 401 Unauthorized
+WWW-Authenticate: Bearer
+X-Auth-Error-Code: expired_token
+```
+
+**Common error codes:**
+
+- `missing_token` - No Authorization header provided
+- `expired_token` - JWT has expired
+- `invalid_signature` - Token signature verification failed
+- `invalid_issuer` - Issuer claim doesn't match expected Auth0 domain
+- `invalid_audience` - Audience claim doesn't match API audience
+- `missing_sub` - Token missing required `sub` claim
+- `jwks_unavailable` - Unable to fetch or validate JWKS from Auth0
+- `invalid_client` - Client ID doesn't match expected value
+
+## Example: Complete OAuth Flow
+
+### Step 1: Initialize OAuth
+
+```bash
+curl -s http://localhost:8000/api/v1/github/auth-url \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+### Step 2: Redirect User
+
+Redirect the user to the `url` returned in step 1.
+
+### Step 3: Handle Callback
+
+After user authorization, GitHub redirects back with `code` and `state`:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/github/callback \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "code": "received_oauth_code",
+    "state": "received_state_token"
+  }'
+```
+
+### Step 4: Use Connection
+
+```bash
+curl http://localhost:8000/api/v1/github/repositories/CONNECTION_ID \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+## JWKS Caching
+
+The API caches Auth0's JWKS (JSON Web Key Set) to improve performance:
+
+- **Cache TTL**: Configurable via `AUTH0_JWKS_CACHE_TTL_SECONDS` (default: varies by deployment)
+- **Fetch timeout**: Configurable via `AUTH0_JWKS_FETCH_TIMEOUT_MS` (default: varies by deployment)
+- **Key rotation**: On unknown `kid` (key ID), the cache automatically refreshes to support Auth0 key rotation
+
+## Best Practices
+
+1. **Token storage** - Store tokens securely (e.g., httpOnly cookies, secure storage)
+2. **Token refresh** - Implement token refresh logic before expiration
+3. **Error handling** - Check `X-Auth-Error-Code` header for specific failure reasons
+4. **State validation** - Always validate OAuth state tokens in callbacks
+5. **HTTPS only** - Use HTTPS in production to prevent token interception

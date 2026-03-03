@@ -1,0 +1,159 @@
+---
+title: "Backlinks API"
+description: "Analyze and retrieve backlink data for SEO audits"
+---
+
+## Analyze Backlinks
+
+<RequestExample>
+```bash POST /backlinks/analyze/{audit_id}
+curl -X POST "https://api.latentgeo.com/backlinks/analyze/123?domain=example.com" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json"
+```
+</RequestExample>
+
+Analyze backlinks for a given audit and domain.
+
+### Path Parameters
+
+<ParamField path="audit_id" type="integer" required>
+  The ID of the audit to analyze backlinks for
+</ParamField>
+
+### Query Parameters
+
+<ParamField query="domain" type="string" required>
+  Domain to analyze backlinks for
+</ParamField>
+
+### Response
+
+Returns an array of backlink objects.
+
+<ResponseField name="id" type="integer">
+  Unique identifier for the backlink record
+</ResponseField>
+
+<ResponseField name="audit_id" type="integer">
+  The audit ID this backlink belongs to
+</ResponseField>
+
+<ResponseField name="source_url" type="string">
+  The URL where the backlink originates from
+</ResponseField>
+
+<ResponseField name="target_url" type="string">
+  The URL being linked to
+</ResponseField>
+
+<ResponseField name="anchor_text" type="string" optional>
+  The anchor text used in the backlink
+</ResponseField>
+
+<ResponseField name="is_dofollow" type="boolean">
+  Whether the backlink is dofollow (passes link equity)
+</ResponseField>
+
+<ResponseField name="domain_authority" type="integer" optional>
+  Domain authority score of the source domain (0-100)
+</ResponseField>
+
+<ResponseField name="created_at" type="string">
+  Timestamp when the backlink was discovered (ISO 8601 format)
+</ResponseField>
+
+<ResponseExample>
+```json Response
+[
+  {
+    "id": 1,
+    "audit_id": 123,
+    "source_url": "https://blog.example.com/article",
+    "target_url": "https://example.com",
+    "anchor_text": "Visit Example",
+    "is_dofollow": true,
+    "domain_authority": 65,
+    "created_at": "2026-03-03T10:30:00Z"
+  },
+  {
+    "id": 2,
+    "audit_id": 123,
+    "source_url": "https://news.site.com/review",
+    "target_url": "https://example.com/product",
+    "anchor_text": "Read more",
+    "is_dofollow": false,
+    "domain_authority": 42,
+    "created_at": "2026-03-03T10:31:00Z"
+  }
+]
+```
+</ResponseExample>
+
+### Error Codes
+
+<ResponseField name="401" type="error">
+  Unauthorized - Invalid or missing authentication token
+</ResponseField>
+
+<ResponseField name="403" type="error">
+  Forbidden - User does not have access to this audit
+</ResponseField>
+
+<ResponseField name="404" type="error">
+  Not Found - Audit ID does not exist
+</ResponseField>
+
+---
+
+## Get Backlinks
+
+<RequestExample>
+```bash GET /backlinks/{audit_id}
+curl -X GET "https://api.latentgeo.com/backlinks/123" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+</RequestExample>
+
+Retrieve stored backlinks for an audit.
+
+### Path Parameters
+
+<ParamField path="audit_id" type="integer" required>
+  The ID of the audit to retrieve backlinks for
+</ParamField>
+
+### Response
+
+Returns an array of backlink objects with the same structure as the analyze endpoint.
+
+<ResponseExample>
+```json Response
+[
+  {
+    "id": 1,
+    "audit_id": 123,
+    "source_url": "https://blog.example.com/article",
+    "target_url": "https://example.com",
+    "anchor_text": "Visit Example",
+    "is_dofollow": true,
+    "domain_authority": 65,
+    "created_at": "2026-03-03T10:30:00Z"
+  }
+]
+```
+</ResponseExample>
+
+### Error Codes
+
+<ResponseField name="401" type="error">
+  Unauthorized - Invalid or missing authentication token
+</ResponseField>
+
+<ResponseField name="403" type="error">
+  Forbidden - User does not have access to this audit
+</ResponseField>
+
+<ResponseField name="404" type="error">
+  Not Found - Audit ID does not exist
+</ResponseField>

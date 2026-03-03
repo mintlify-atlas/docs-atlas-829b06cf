@@ -1,0 +1,251 @@
+---
+title: Local Development Setup
+description: Set up LatentGEO for local development with Docker Compose and hot reload
+---
+
+## Prerequisites
+
+Before starting, ensure you have the following installed:
+
+- **Docker Desktop** (v20.10+)
+- **Docker Compose plugin** (v2.0+)
+- **Git** for cloning the repository
+
+<Check>
+Verify Docker is running: `docker --version` and `docker compose version`
+</Check>
+
+## Clone and Configure
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone <repository-url>
+    cd latentgeo
+    ```
+  </Step>
+
+  <Step title="Create environment file">
+    Copy the example environment file and configure your credentials:
+
+    ```bash
+    cp .env.example .env
+    ```
+
+    Required variables:
+    ```bash
+    # Database (Supabase)
+    DATABASE_URL=postgresql://user:password@host:5432/database
+    
+    # Redis (included in Docker Compose)
+    REDIS_URL=redis://redis:6379/0
+    
+    # Auth0
+    AUTH0_DOMAIN=your-domain.auth0.com
+    AUTH0_API_AUDIENCE=your-api-audience
+    AUTH0_CLIENT_ID=your-client-id
+    AUTH0_CLIENT_SECRET=your-client-secret
+    
+    # API Keys
+    NVIDIA_API_KEY=your-nvidia-key
+    GOOGLE_PAGESPEED_API_KEY=your-pagespeed-key
+    
+    # Supabase Storage
+    SUPABASE_URL=https://your-project.supabase.co
+    SUPABASE_KEY=your-anon-key
+    SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+    ```
+  </Step>
+
+  <Step title="Start development environment">
+    Launch all services with hot reload enabled:
+
+    ```bash
+    docker compose -f docker-compose.dev.yml up --build
+    ```
+
+    This starts:
+    - **Backend** (FastAPI) on port 8000 with auto-reload
+    - **Frontend** (Next.js) on port 3000 with hot module replacement
+    - **Worker** (Celery) for background tasks
+    - **Redis** for caching and task queue
+  </Step>
+
+  <Step title="Verify services are running">
+    ```bash
+    # Check all containers
+    docker compose -f docker-compose.dev.yml ps
+    
+    # Test backend health
+    curl http://localhost:8000/health
+    
+    # Visit frontend
+    open http://localhost:3000
+    ```
+  </Step>
+</Steps>
+
+## Development Mode Features
+
+The `docker-compose.dev.yml` configuration includes:
+
+### Hot Reload
+
+<CodeGroup>
+```yaml Backend
+volumes:
+  - ./backend:/app:cached
+command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+```yaml Frontend
+volumes:
+  - ./frontend:/app:delegated
+environment:
+  WATCHPACK_POLLING: "true"
+  CHOKIDAR_USEPOLLING: "true"
+```
+</CodeGroup>
+
+### Code Mounting
+
+- Backend code is mounted from `./backend` to `/app`
+- Frontend code is mounted from `./frontend` to `/app`
+- Changes are reflected immediately without rebuilding
+
+### Resource Limits
+
+Optimized for local development:
+
+```yaml
+deploy:
+  resources:
+    limits:
+      cpus: '2.0'
+      memory: 2G
+    reservations:
+      cpus: '1.0'
+      memory: 1G
+```
+
+## Accessing Services
+
+### Local URLs
+
+| Service | URL | Description |
+|---------|-----|-------------|
+| Frontend | http://localhost:3000 | Next.js application |
+| Backend API | http://localhost:8000 | FastAPI server |
+| API Docs | http://localhost:8000/docs | Swagger UI |
+| ReDoc | http://localhost:8000/redoc | Alternative API docs |
+| OpenAPI Schema | http://localhost:8000/openapi.json | OpenAPI specification |
+
+### Database Connection
+
+Connect to Supabase PostgreSQL using the `DATABASE_URL` from your `.env` file:
+
+```bash
+# Using psql
+psql $DATABASE_URL
+
+# Using pgcli (better UX)
+pgcli $DATABASE_URL
+```
+
+### Redis CLI
+
+Access Redis for debugging:
+
+```bash
+docker compose -f docker-compose.dev.yml exec redis redis-cli
+```
+
+## SSE (Server-Sent Events) Configuration
+
+LatentGEO uses SSE for real-time audit progress updates:
+
+```bash
+# Redis-first mode (recommended)
+SSE_SOURCE=redis
+SSE_FALLBACK_DB_INTERVAL_SECONDS=10
+SSE_HEARTBEAT_SECONDS=30
+SSE_RETRY_MS=5000
+```
+
+<Info>
+The frontend consumes SSE via `/api/v1/sse/audits/{audit_id}/progress` through a Next.js proxy route.
+</Info>
+
+## Troubleshooting
+
+### Port Conflicts
+
+If port 5432, 6379, 8000, or 3000 are already in use:
+
+```bash
+# Change database port
+export DEV_DB_HOST_PORT=5433
+
+# Rebuild with new port
+docker compose -f docker-compose.dev.yml up --build
+```
+
+### Logs
+
+View logs for specific services:
+
+```bash
+# All services
+docker compose -f docker-compose.dev.yml logs -f
+
+# Backend only
+docker compose -f docker-compose.dev.yml logs -f backend
+
+# Worker only
+docker compose -f docker-compose.dev.yml logs -f worker
+```
+
+### Reset Everything
+
+Clean slate:
+
+```bash
+# Stop and remove containers, volumes
+docker compose -f docker-compose.dev.yml down -v
+
+# Rebuild from scratch
+docker compose -f docker-compose.dev.yml up --build
+```
+
+### Database Connection Issues
+
+If you see connection errors:
+
+```bash
+# Verify DATABASE_URL is set
+echo $DATABASE_URL
+
+# Test connection from backend container
+docker compose -f docker-compose.dev.yml exec backend python -c "from app.core.database import engine; print(engine.connect())"
+```
+
+<Warning>
+Ensure `DB_POOL_PRE_PING=false` when using Supabase connection pooler.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Run Tests" icon="flask" href="/development/testing">
+    Learn how to run the test suite
+  </Card>
+  <Card title="Backend Services" icon="server" href="/development/backend-services">
+    Explore the service layer architecture
+  </Card>
+  <Card title="Frontend Components" icon="react" href="/development/frontend-components">
+    Build UI with Radix components
+  </Card>
+  <Card title="Contributing" icon="code-branch" href="/development/contributing">
+    Contribution guidelines and workflow
+  </Card>
+</CardGroup>

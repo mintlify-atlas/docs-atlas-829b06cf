@@ -1,0 +1,246 @@
+---
+title: Environment Setup
+description: Configure LatentGEO for production or development environments
+---
+
+## Environment File
+
+LatentGEO uses a `.env` file in the project root for configuration. Start by copying the example file:
+
+```bash
+cp .env.example .env
+```
+
+Then populate it with your actual secrets and configuration values.
+
+## Critical Environment Variables
+
+### Database (Supabase)
+
+LatentGEO uses Supabase Postgres with connection pooling:
+
+```bash
+DATABASE_URL=postgresql+psycopg2://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require
+DB_POOL_SIZE=5
+DB_MAX_OVERFLOW=5
+DB_POOL_TIMEOUT=15
+DB_POOL_RECYCLE=900
+DB_CONNECT_TIMEOUT_SECONDS=5
+DB_POOL_PRE_PING=false
+```
+
+<Note>
+  `DB_POOL_PRE_PING=false` is recommended when using Supabase's pooler to avoid unnecessary overhead.
+</Note>
+
+<Warning>
+  Keep `DB_POOL_SIZE=5` and `DB_MAX_OVERFLOW=5` initially to prevent connection saturation. Monitor and adjust based on your load.
+</Warning>
+
+### Redis / Celery
+
+Redis powers both the real-time SSE system and Celery task queue:
+
+```bash
+REDIS_URL=redis://redis:6379/0
+CELERY_BROKER_URL=redis://redis:6379/0
+CELERY_RESULT_BACKEND=redis://redis:6379/1
+```
+
+<Note>
+  Note that Celery uses different Redis databases (0 for broker, 1 for results) to isolate concerns.
+</Note>
+
+### Server-Sent Events (SSE)
+
+Configure the real-time progress monitoring system:
+
+```bash
+SSE_SOURCE=redis
+SSE_FALLBACK_DB_INTERVAL_SECONDS=10
+SSE_HEARTBEAT_SECONDS=30
+SSE_RETRY_MS=5000
+```
+
+**Configuration explained:**
+
+- `SSE_SOURCE`: Primary event source (`redis` or `db`). Redis is recommended for performance.
+- `SSE_FALLBACK_DB_INTERVAL_SECONDS`: How often to check the database if Redis has no events (seconds)
+- `SSE_HEARTBEAT_SECONDS`: Keep-alive interval to maintain SSE connections
+- `SSE_RETRY_MS`: Client retry delay after connection loss (milliseconds)
+
+<Warning>
+  If you experience high fallback usage, check Redis connectivity and the `SSE_SOURCE` setting.
+</Warning>
+
+### Frontend URLs
+
+Configure API endpoints for both server-side and client-side requests:
+
+```bash
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
+API_URL=http://backend:8000
+```
+
+**URL usage:**
+
+- `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_BACKEND_URL`: Used by browser for client-side API calls (points to localhost)
+- `API_URL`: Used by Next.js server components for server-side API calls (points to Docker service name)
+
+## Execution Modes
+
+LatentGEO supports two Docker Compose deployment modes:
+
+<Tabs>
+  <Tab title="Standard Mode">
+    **Production-ready deployment** with optimized builds.
+    
+    ```bash
+    docker compose up --build -d
+    ```
+    
+    **Characteristics:**
+    - Backend and worker without code mounts
+    - Frontend in production mode (optimized build)
+    - Server-side `API_URL`: `http://backend:8000`
+    - Browser `NEXT_PUBLIC_*`: `http://localhost:8000`
+    - Runs in detached mode (`-d`)
+    
+    **Best for**: Production deployments, staging environments, testing production builds
+  </Tab>
+  
+  <Tab title="Development Mode">
+    **Development environment** with hot reload for rapid iteration.
+    
+    ```bash
+    docker compose -f docker-compose.dev.yml up --build
+    ```
+    
+    **Characteristics:**
+    - Hot reload for both backend and frontend
+    - Code mounts for immediate file changes
+    - Runs in foreground (logs visible)
+    
+    **Best for**: Active development, debugging, feature implementation
+  </Tab>
+</Tabs>
+
+## Real-time System
+
+LatentGEO uses two complementary real-time mechanisms:
+
+- **SSE (Server-Sent Events)**: Real-time progress updates for the audit dashboard UI
+- **Webhooks**: External integrations for incoming/outgoing automations
+
+These systems work together but serve different purposes. SSE provides instant feedback in the UI, while webhooks enable integration with external services.
+
+## Supabase Region Migration
+
+If you need to migrate to a different Supabase region for better latency:
+
+<Steps>
+  <Step title="Create Target Project">
+    Create a new Supabase project in the target region (closer to your users).
+  </Step>
+
+  <Step title="Freeze Writes">
+    During the migration window, freeze write operations to the source database.
+  </Step>
+
+  <Step title="Backup Database">
+    Create a PostgreSQL dump from the source database:
+    
+    ```bash
+    pg_dump --format=custom --no-owner --no-privileges "$SOURCE_DB_URL" > supabase.dump
+    ```
+  </Step>
+
+  <Step title="Restore Database">
+    Restore the dump to the target database:
+    
+    ```bash
+    pg_restore --clean --if-exists --no-owner --no-privileges --dbname "$TARGET_DB_URL" supabase.dump
+    ```
+  </Step>
+
+  <Step title="Migrate Storage">
+    Migrate the `audit-reports` bucket, validating checksums and file sizes.
+  </Step>
+
+  <Step title="Verify Data">
+    Verify record counts for critical tables: `audits`, `reports`, `audited_pages`, `competitors`.
+  </Step>
+
+  <Step title="Rotate Secrets">
+    Update runtime and CI/CD secrets with new Supabase URLs and credentials.
+  </Step>
+
+  <Step title="Monitor">
+    Monitor the system for 24 hours and keep a rollback plan ready.
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="High SSE Fallback Usage">
+    If the SSE system frequently falls back to database polling:
+    
+    1. Check Redis connectivity and logs
+    2. Verify `SSE_SOURCE=redis` is set correctly
+    3. Review the frontend SSE proxy and hook implementation
+    4. Check for Redis memory issues or eviction policies
+  </Accordion>
+
+  <Accordion title="High Database Latency">
+    If you experience slow database queries:
+    
+    1. Verify you're using a Supabase region close to your deployment
+    2. Confirm you're using the pooler URL (contains `.pooler.supabase.com`)
+    3. Check connection pool settings aren't too restrictive
+    4. Monitor Supabase dashboard for performance metrics
+  </Accordion>
+
+  <Accordion title="Connection Saturation">
+    If you see database connection errors:
+    
+    1. Keep initial values: `DB_POOL_SIZE=5`, `DB_MAX_OVERFLOW=5`
+    2. Monitor actual connection usage before increasing
+    3. Ensure `DB_POOL_PRE_PING=false` with Supabase pooler
+    4. Check for connection leaks in application code
+  </Accordion>
+</AccordionGroup>
+
+## Validation
+
+Verify your Docker Compose configuration before deploying:
+
+```bash
+# Validate standard mode
+docker compose config
+
+# Validate development mode
+docker compose -f docker-compose.dev.yml config
+```
+
+These commands will show the resolved configuration and catch any syntax errors.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Quick Start"
+    icon="rocket"
+    href="/quickstart"
+  >
+    Launch LatentGEO with your configured environment
+  </Card>
+  <Card
+    title="API Documentation"
+    icon="book"
+    href="http://localhost:8000/docs"
+  >
+    Explore the API after starting your services
+  </Card>
+</CardGroup>

@@ -1,0 +1,383 @@
+---
+title: Testing Guide
+description: Run tests, ensure quality, and validate changes in LatentGEO
+---
+
+## Overview
+
+LatentGEO uses multiple testing frameworks:
+
+- **Backend**: pytest for unit, integration, and E2E tests
+- **Frontend**: Vitest for unit and component tests
+- **E2E**: Playwright for end-to-end browser tests
+
+## Quick Validation
+
+Run this before committing or creating a PR:
+
+<Steps>
+  <Step title="Install dependencies">
+    ```bash
+    # Backend
+    python -m pip install -r backend/requirements.txt
+    
+    # Frontend
+    pnpm --dir frontend install
+    ```
+  </Step>
+
+  <Step title="Run fast validation suite">
+    ```bash
+    # Frontend checks
+    pnpm --dir frontend lint
+    pnpm --dir frontend run format:check
+    pnpm --dir frontend run type-check
+    pnpm --dir frontend test:ci
+    pnpm --dir frontend build
+    
+    # Backend checks
+    python -m ruff check backend/app backend/tests
+    python -m black --check backend
+    python -m isort --check-only backend
+    python -m mypy backend/app --ignore-missing-imports --show-error-codes
+    python -m bandit -r backend/app -q
+    python -m pip_audit -r backend/requirements.txt
+    
+    # Fast tests (exclude integration and live tests)
+    pytest -q backend/tests -m "not integration and not live"
+    ```
+  </Step>
+</Steps>
+
+<Check>
+All commands should exit with status 0 for the validation to pass.
+</Check>
+
+## Backend Testing
+
+### Running Pytest
+
+<CodeGroup>
+```bash All Tests
+# Run all tests
+pytest backend/tests/
+
+# Run with coverage
+pytest backend/tests/ --cov=app --cov-report=html
+```
+
+```bash Specific Tests
+# Run specific test file
+pytest backend/tests/test_audit_service.py
+
+# Run specific test function
+pytest backend/tests/test_audit_service.py::test_create_audit
+
+# Run tests matching pattern
+pytest -k "test_security"
+```
+
+```bash By Marker
+# Run only unit tests
+pytest -m "not integration and not live"
+
+# Run integration tests
+pytest -m integration
+
+# Verbose output
+pytest -v backend/tests/
+```
+</CodeGroup>
+
+### Test Organization
+
+Tests are organized by component:
+
+```
+backend/tests/
+├── test_audit_service.py          # Audit logic tests
+├── test_pdf_locking.py            # PDF security tests
+├── test_security_remediation.py   # Auth and ownership tests
+├── test_sse_auth_contract.py      # SSE authentication
+├── test_pipeline_service.py       # Pipeline orchestration
+├── test_github_fix_inputs_api.py  # GitHub integration
+└── test_release_smoke_external.py # External smoke tests
+```
+
+### Test Markers
+
+Tests use pytest markers to categorize:
+
+```python
+@pytest.mark.unit
+def test_fast_unit():
+    pass
+
+@pytest.mark.integration
+def test_requires_db():
+    pass
+
+@pytest.mark.live
+def test_requires_external_api():
+    pass
+```
+
+### Security Regression Suite
+
+After changing auth, ownership, or security code:
+
+```bash
+pytest -q backend/tests/test_security_remediation.py
+pytest -q backend/tests/test_pdf_locking.py
+pytest -q backend/tests/test_ssl_fallback_flags.py
+pytest -q backend/tests/test_github_fix_inputs_api.py
+pytest -q backend/tests/test_additional_remediation.py
+pytest -q backend/tests/test_security_middleware.py
+pytest -q backend/tests/test_rate_limit_middleware.py
+```
+
+### Docker Testing
+
+Run tests inside containers:
+
+```bash
+# Start services
+docker compose up -d db redis backend worker
+
+# Execute tests in backend container
+docker compose exec backend pytest -q tests/
+
+# Specific test files
+docker compose exec backend pytest -q tests/test_competitor_queries.py tests/test_pdf_fast_mode.py
+```
+
+<Info>
+Inside the container, the project root is `/app`, so use `tests/...` paths (not `backend/tests/`).
+</Info>
+
+## Frontend Testing
+
+### Vitest (Unit & Component Tests)
+
+<CodeGroup>
+```bash Run Tests
+# Watch mode (development)
+pnpm --dir frontend test
+
+# CI mode (single run)
+pnpm --dir frontend test:ci
+
+# With coverage
+pnpm --dir frontend test:ci --coverage
+```
+
+```bash Specific Tests
+# Run specific test file
+pnpm --dir frontend test components/Button.test.tsx
+
+# Run tests matching pattern
+pnpm --dir frontend test --grep "AuditService"
+```
+</CodeGroup>
+
+### Test Structure
+
+```typescript
+import { describe, it, expect } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { Button } from '@/components/ui/button';
+
+describe('Button', () => {
+  it('renders with text', () => {
+    render(<Button>Click me</Button>);
+    expect(screen.getByText('Click me')).toBeInTheDocument();
+  });
+});
+```
+
+### Playwright (E2E Tests)
+
+End-to-end browser tests:
+
+```bash
+# Install browsers (first time)
+pnpm --dir frontend run perf:e2e:install
+
+# Run E2E tests
+pnpm --dir frontend run perf:e2e
+
+# Run in headed mode (see browser)
+pnpm --dir frontend run perf:e2e --headed
+
+# Run specific test
+pnpm --dir frontend run perf:e2e e2e/geo-performance.spec.ts
+```
+
+## API Contract Sync
+
+When backend routes or schemas change, regenerate frontend types:
+
+<Steps>
+  <Step title="Start backend server">
+    ```bash
+    docker compose -f docker-compose.dev.yml up backend
+    ```
+  </Step>
+
+  <Step title="Generate types from OpenAPI">
+    ```bash
+    pnpm --dir frontend run api:generate-types
+    ```
+
+    This updates:
+    - `frontend/lib/api-client/openapi.json`
+    - `frontend/lib/api-client/schema.ts`
+  </Step>
+
+  <Step title="Verify types compile">
+    ```bash
+    pnpm --dir frontend run type-check
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+Always regenerate types after modifying FastAPI route signatures or Pydantic schemas.
+</Warning>
+
+## Code Quality Tools
+
+### Backend Linting
+
+<CodeGroup>
+```bash Ruff (Linter)
+# Check for issues
+python -m ruff check backend/app backend/tests
+
+# Auto-fix safe issues
+python -m ruff check --fix backend/app backend/tests
+```
+
+```bash Black (Formatter)
+# Check formatting
+python -m black --check backend
+
+# Apply formatting
+python -m black backend
+```
+
+```bash isort (Import Sorting)
+# Check imports
+python -m isort --check-only backend
+
+# Fix imports
+python -m isort backend
+```
+
+```bash mypy (Type Checking)
+# Type check
+python -m mypy backend/app --ignore-missing-imports --show-error-codes
+```
+</CodeGroup>
+
+### Security Scanning
+
+```bash
+# Bandit (security linter)
+python -m bandit -r backend/app -q
+
+# pip-audit (dependency vulnerabilities)
+python -m pip_audit -r backend/requirements.txt
+```
+
+### Frontend Linting
+
+<CodeGroup>
+```bash ESLint
+# Check for issues
+pnpm --dir frontend lint
+
+# Auto-fix
+pnpm --dir frontend lint --fix
+```
+
+```bash Prettier
+# Check formatting
+pnpm --dir frontend run format:check
+
+# Apply formatting
+prettier --write frontend/
+```
+
+```bash TypeScript
+# Type check
+pnpm --dir frontend run type-check
+```
+</CodeGroup>
+
+## External Smoke Tests
+
+Optional pre-release validation against staging/production:
+
+```bash
+SMOKE_BASE_URL=https://your-staging-url \
+SMOKE_BEARER_TOKEN=optional-token \
+pytest -q backend/tests/test_release_smoke_external.py
+```
+
+## Docker Validation
+
+Validate Docker Compose configuration:
+
+```bash
+# Validate compose files
+docker compose config
+docker compose -f docker-compose.dev.yml config
+
+# Verify required env vars
+DB_PASSWORD= docker compose config  # Should fail
+DB_PASSWORD=test docker compose config  # Should succeed
+
+# Check runtime user in images
+docker build -f Dockerfile.backend -t latentgeo-backend .
+docker run --rm latentgeo-backend id
+```
+
+## CI/CD Pipeline
+
+The release gate validates:
+
+1. **Linting**: ruff, black, isort, ESLint
+2. **Type checking**: mypy, TypeScript
+3. **Security**: bandit, pip-audit
+4. **Unit tests**: pytest (fast), vitest
+5. **Build**: Frontend production build
+
+<Check>
+All checks must pass before merging to main.
+</Check>
+
+## Test Coverage
+
+Generate coverage reports:
+
+```bash
+# Backend coverage
+pytest backend/tests/ --cov=app --cov-report=html
+open htmlcov/index.html
+
+# Frontend coverage
+pnpm --dir frontend test:ci --coverage
+open frontend/coverage/index.html
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Contributing Guide" icon="code-branch" href="/development/contributing">
+    Learn the workflow and commit conventions
+  </Card>
+  <Card title="Backend Services" icon="server" href="/development/backend-services">
+    Understand service layer architecture
+  </Card>
+</CardGroup>

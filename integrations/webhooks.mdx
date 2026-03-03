@@ -1,0 +1,617 @@
+---
+title: 'Webhooks'
+description: 'Receive real-time notifications and integrate LatentGEO with external automation tools'
+icon: 'webhook'
+---
+
+## Overview
+
+Webhooks allow LatentGEO to send real-time notifications to your applications when events occur. You can also configure LatentGEO to receive webhooks from GitHub and HubSpot.
+
+**Webhook Types:**
+
+- **Outgoing Webhooks**: LatentGEO sends events to your endpoints
+- **Incoming Webhooks**: LatentGEO receives events from external services
+
+## Outgoing Webhooks
+
+Get notified when key events happen in LatentGEO.
+
+### Configure a Webhook Endpoint
+
+<Steps>
+  <Step title="Create Webhook Configuration">
+    ```bash
+    POST /api/webhooks/config
+    ```
+
+    Body:
+    ```json
+    {
+      "url": "https://your-app.com/webhooks/latentgeo",
+      "secret": "your-signing-secret-min-16-chars",
+      "events": [
+        "audit.completed",
+        "pdf.ready",
+        "github.pr_created"
+      ],
+      "active": true,
+      "description": "Production webhook for audit notifications"
+    }
+    ```
+
+    <Warning>
+      The `secret` must be at least 16 characters. Store it securely - you'll use it to verify webhook signatures.
+    </Warning>
+  </Step>
+
+  <Step title="Verify Endpoint">
+    Test your webhook endpoint:
+
+    ```bash
+    POST /api/webhooks/test
+    ```
+
+    Body:
+    ```json
+    {
+      "url": "https://your-app.com/webhooks/latentgeo",
+      "secret": "your-signing-secret-min-16-chars",
+      "event_type": "audit.completed"
+    }
+    ```
+
+    Response:
+    ```json
+    {
+      "success": true,
+      "status_code": 200,
+      "response_time_ms": 145.23,
+      "error": null
+    }
+    ```
+  </Step>
+
+  <Step title="Handle Webhook Events">
+    Your endpoint will receive POST requests with event data. See [Webhook Payload Format](#webhook-payload-format) below.
+  </Step>
+</Steps>
+
+### Available Event Types
+
+Get all available webhook events:
+
+```bash
+GET /api/webhooks/events
+```
+
+Response:
+```json
+[
+  {
+    "event": "audit.completed",
+    "description": "Triggered when audit finishes successfully"
+  },
+  {
+    "event": "audit.failed",
+    "description": "Triggered when audit fails with an error"
+  },
+  {
+    "event": "pdf.ready",
+    "description": "Triggered when PDF report is ready for download"
+  },
+  {
+    "event": "github.pr_created",
+    "description": "Triggered when a GitHub PR is created"
+  }
+]
+```
+
+### Complete Event List
+
+| Event | Description | Use Case |
+|-------|-------------|----------|
+| `audit.created` | New audit is created | Track audit initiation |
+| `audit.started` | Audit processing begins | Update UI with progress |
+| `audit.completed` | Audit finishes successfully | Trigger downstream workflows |
+| `audit.failed` | Audit fails with error | Send error alerts |
+| `audit.progress` | Progress milestones (25%, 50%, 75%) | Real-time progress updates |
+| `report.generated` | Audit report is generated | Notify stakeholders |
+| `pdf.ready` | PDF report is ready | Send download link |
+| `pagespeed.completed` | PageSpeed analysis completes | Display performance metrics |
+| `geo.analysis_completed` | GEO tools analysis completes | Show GEO score |
+| `github.pr_created` | GitHub PR is created | Notify development team |
+| `github.sync_completed` | GitHub sync completes | Update repository list |
+| `competitor.analysis_completed` | Competitor analysis completes | Show competitive insights |
+
+### Webhook Payload Format
+
+All outgoing webhooks follow this structure:
+
+<CodeGroup>
+```json audit.completed
+{
+  "event": "audit.completed",
+  "timestamp": "2024-01-15T14:30:00Z",
+  "webhook_id": "wh_abc123xyz789",
+  "data": {
+    "audit_id": 123,
+    "url": "https://www.example.com",
+    "status": "completed",
+    "seo_score": 82,
+    "geo_score": 75,
+    "issues_found": 12,
+    "completed_at": "2024-01-15T14:30:00Z"
+  }
+}
+```
+
+```json pdf.ready
+{
+  "event": "pdf.ready",
+  "timestamp": "2024-01-15T14:35:00Z",
+  "webhook_id": "wh_def456abc789",
+  "data": {
+    "audit_id": 123,
+    "pdf_url": "https://api.latentgeo.com/api/reports/123/pdf",
+    "expires_at": "2024-01-22T14:35:00Z",
+    "file_size_bytes": 2458392
+  }
+}
+```
+
+```json github.pr_created
+{
+  "event": "github.pr_created",
+  "timestamp": "2024-01-15T15:00:00Z",
+  "webhook_id": "wh_ghi789jkl012",
+  "data": {
+    "pr_id": "pr_123",
+    "pr_number": 42,
+    "repository": "octocat/blog",
+    "title": "SEO improvements for 5 blog posts",
+    "html_url": "https://github.com/octocat/blog/pull/42",
+    "files_changed": 5,
+    "fixes_applied": 18,
+    "audit_id": 123
+  }
+}
+```
+
+```json audit.failed
+{
+  "event": "audit.failed",
+  "timestamp": "2024-01-15T14:25:00Z",
+  "webhook_id": "wh_mno345pqr678",
+  "data": {
+    "audit_id": 124,
+    "url": "https://www.example.com/broken",
+    "error": "Connection timeout",
+    "error_code": "TIMEOUT",
+    "failed_at": "2024-01-15T14:25:00Z"
+  }
+}
+```
+</CodeGroup>
+
+### Webhook Headers
+
+Every webhook request includes these headers:
+
+```http
+X-Webhook-Event: audit.completed
+X-Webhook-Timestamp: 2024-01-15T14:30:00Z
+X-Webhook-Signature: sha256=a8f7d9c6b5e4...
+Content-Type: application/json
+User-Agent: LatentGEO-Webhooks/1.0
+```
+
+## Webhook Authentication
+
+### Verifying Signatures
+
+All webhook payloads include an HMAC-SHA256 signature in the `X-Webhook-Signature` header:
+
+```
+X-Webhook-Signature: sha256=a8f7d9c6b5e4f3a2d1c0b9a8f7e6d5c4b3a2...
+```
+
+<Steps>
+  <Step title="Extract Signature">
+    ```python
+    signature_header = request.headers.get('X-Webhook-Signature')
+    # Format: "sha256=<hex_digest>"
+    expected_signature = signature_header.split('=')[1]
+    ```
+  </Step>
+
+  <Step title="Compute HMAC">
+    ```python
+    import hmac
+    import hashlib
+
+    secret = "your-signing-secret-min-16-chars"
+    payload_body = request.body  # Raw request body as bytes
+
+    computed_signature = hmac.new(
+        secret.encode('utf-8'),
+        payload_body,
+        hashlib.sha256
+    ).hexdigest()
+    ```
+  </Step>
+
+  <Step title="Compare Signatures">
+    ```python
+    if not hmac.compare_digest(computed_signature, expected_signature):
+        return {"error": "Invalid signature"}, 401
+
+    # Signature is valid - process webhook
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+  Always use `hmac.compare_digest()` for signature comparison to prevent timing attacks. Never use `==` for cryptographic comparisons.
+</Warning>
+
+### Example Implementations
+
+<CodeGroup>
+```python Python (Flask)
+from flask import Flask, request
+import hmac
+import hashlib
+import json
+
+app = Flask(__name__)
+WEBHOOK_SECRET = "your-signing-secret-min-16-chars"
+
+@app.route('/webhooks/latentgeo', methods=['POST'])
+def handle_webhook():
+    # Get signature
+    signature_header = request.headers.get('X-Webhook-Signature', '')
+    if not signature_header.startswith('sha256='):
+        return {"error": "Missing signature"}, 401
+    
+    expected_sig = signature_header[7:]  # Remove 'sha256=' prefix
+    
+    # Compute signature
+    body = request.get_data()
+    computed_sig = hmac.new(
+        WEBHOOK_SECRET.encode(),
+        body,
+        hashlib.sha256
+    ).hexdigest()
+    
+    # Verify
+    if not hmac.compare_digest(computed_sig, expected_sig):
+        return {"error": "Invalid signature"}, 401
+    
+    # Process webhook
+    payload = request.get_json()
+    event_type = payload.get('event')
+    
+    if event_type == 'audit.completed':
+        handle_audit_completed(payload['data'])
+    elif event_type == 'pdf.ready':
+        handle_pdf_ready(payload['data'])
+    
+    return {"status": "received"}, 200
+```
+
+```javascript Node.js (Express)
+const express = require('express');
+const crypto = require('crypto');
+
+const app = express();
+const WEBHOOK_SECRET = 'your-signing-secret-min-16-chars';
+
+app.post('/webhooks/latentgeo', express.raw({type: 'application/json'}), (req, res) => {
+  const signature = req.headers['x-webhook-signature'];
+  
+  if (!signature || !signature.startsWith('sha256=')) {
+    return res.status(401).json({ error: 'Missing signature' });
+  }
+  
+  const expectedSig = signature.substring(7);
+  
+  // Compute signature
+  const computedSig = crypto
+    .createHmac('sha256', WEBHOOK_SECRET)
+    .update(req.body)
+    .digest('hex');
+  
+  // Verify
+  if (!crypto.timingSafeEqual(Buffer.from(computedSig), Buffer.from(expectedSig))) {
+    return res.status(401).json({ error: 'Invalid signature' });
+  }
+  
+  // Process webhook
+  const payload = JSON.parse(req.body);
+  const eventType = payload.event;
+  
+  if (eventType === 'audit.completed') {
+    handleAuditCompleted(payload.data);
+  }
+  
+  res.json({ status: 'received' });
+});
+```
+
+```ruby Ruby (Sinatra)
+require 'sinatra'
+require 'json'
+require 'openssl'
+
+WEBHOOK_SECRET = 'your-signing-secret-min-16-chars'
+
+post '/webhooks/latentgeo' do
+  request.body.rewind
+  payload_body = request.body.read
+  
+  signature_header = request.env['HTTP_X_WEBHOOK_SIGNATURE'] || ''
+  return [401, {error: 'Missing signature'}.to_json] unless signature_header.start_with?('sha256=')
+  
+  expected_sig = signature_header[7..-1]
+  
+  # Compute signature
+  computed_sig = OpenSSL::HMAC.hexdigest(
+    OpenSSL::Digest.new('sha256'),
+    WEBHOOK_SECRET,
+    payload_body
+  )
+  
+  # Verify
+  return [401, {error: 'Invalid signature'}.to_json] unless Rack::Utils.secure_compare(computed_sig, expected_sig)
+  
+  # Process webhook
+  payload = JSON.parse(payload_body)
+  event_type = payload['event']
+  
+  case event_type
+  when 'audit.completed'
+    handle_audit_completed(payload['data'])
+  when 'pdf.ready'
+    handle_pdf_ready(payload['data'])
+  end
+  
+  {status: 'received'}.to_json
+end
+```
+</CodeGroup>
+
+## Incoming Webhooks
+
+LatentGEO can receive webhooks from GitHub and HubSpot to automate workflows.
+
+### GitHub Incoming Webhooks
+
+**Endpoint:**
+```
+POST /api/webhooks/github/incoming
+```
+
+**Supported Events:**
+- `push`: Code pushed to repository
+- `pull_request`: PR opened, closed, or merged
+- `ping`: GitHub webhook test
+
+**Headers:**
+- `X-GitHub-Event`: Event type
+- `X-Hub-Signature-256`: HMAC-SHA256 signature
+
+<Steps>
+  <Step title="Configure in GitHub">
+    1. Go to your repository settings
+    2. Navigate to **Webhooks** → **Add webhook**
+    3. Set Payload URL: `https://api.latentgeo.com/api/webhooks/github/incoming`
+    4. Set Content type: `application/json`
+    5. Set Secret: Your `GITHUB_WEBHOOK_SECRET`
+    6. Select events: `push`, `pull_request`
+  </Step>
+
+  <Step title="Configure LatentGEO">
+    Set the `GITHUB_WEBHOOK_SECRET` environment variable on your LatentGEO instance to match the secret you configured in GitHub.
+  </Step>
+
+  <Step title="Test Webhook">
+    GitHub sends a `ping` event when you save the webhook. Check your webhook delivery history in GitHub to ensure it was received successfully.
+  </Step>
+</Steps>
+
+<Warning>
+  **Production Requirement**: `GITHUB_WEBHOOK_SECRET` must be configured in production. In debug mode, webhooks are accepted without signature verification (for testing only).
+</Warning>
+
+#### Push Event Processing
+
+When code is pushed to a repository:
+
+1. LatentGEO checks if the repository is configured for `auto_audit`
+2. If enabled, an audit is automatically triggered
+3. The webhook event is logged in the database
+
+#### Pull Request Event Processing
+
+When a PR is opened, closed, or merged:
+
+1. LatentGEO looks up the PR in the database
+2. Updates the PR status (`open`, `merged`, `closed`)
+3. Records timestamps (`merged_at`, `closed_at`)
+
+### HubSpot Incoming Webhooks
+
+**Endpoint:**
+```
+POST /api/webhooks/hubspot/incoming
+```
+
+**Supported Events:**
+- `contact.creation`: New contact added
+- `contact.propertyChange`: Contact property updated
+- `deal.creation`: New deal created
+
+<Steps>
+  <Step title="Configure in HubSpot">
+    1. Go to HubSpot Settings → Integrations → **Webhooks**
+    2. Create a new webhook subscription
+    3. Set Target URL: `https://api.latentgeo.com/api/webhooks/hubspot/incoming`
+    4. Select event types
+  </Step>
+
+  <Step title="Test Webhook">
+    HubSpot sends test events when you create a webhook. Check your LatentGEO logs to verify receipt.
+  </Step>
+</Steps>
+
+<Info>
+  HubSpot webhooks are sent as arrays of events. LatentGEO processes each event individually and returns a summary.
+</Info>
+
+**Example HubSpot Payload:**
+
+```json
+[
+  {
+    "objectId": 12345,
+    "subscriptionType": "contact.creation",
+    "portalId": 62515,
+    "occurredAt": 1578856320000,
+    "attemptNumber": 0
+  }
+]
+```
+
+## URL Validation
+
+LatentGEO validates outbound webhook URLs for security:
+
+<Warning>
+  **Blocked Hosts:**
+  - `localhost` and `127.0.0.1`
+  - Private IP ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
+  - `.local`, `.localhost`, `.internal` domains
+  - Link-local addresses
+  
+  **Protocol Requirements:**
+  - Production: HTTPS only
+  - Debug mode: HTTP allowed
+</Warning>
+
+## Webhook Health Check
+
+Monitor webhook service health:
+
+```bash
+GET /api/webhooks/health
+```
+
+Response:
+```json
+{
+  "status": "healthy",
+  "service": "webhook",
+  "supported_events": 12,
+  "timestamp": "2024-01-15T14:30:00Z"
+}
+```
+
+## Best Practices
+
+1. **Always verify signatures**: Never skip signature validation in production
+2. **Respond quickly**: Return a 200 response immediately, process in background
+3. **Handle retries**: LatentGEO retries failed webhooks with exponential backoff
+4. **Log webhook IDs**: Use `webhook_id` for debugging and deduplication
+5. **Monitor delivery rates**: Check your webhook endpoint's success rate
+6. **Use HTTPS**: Required in production for security
+7. **Idempotent handling**: Process each `webhook_id` only once
+
+## Troubleshooting
+
+### Webhook Not Received
+
+- Check your firewall allows LatentGEO's IP range
+- Verify the URL is publicly accessible
+- Check SSL certificate is valid (for HTTPS)
+- Review webhook delivery logs in LatentGEO
+
+### Signature Verification Fails
+
+- Ensure you're using the raw request body (not parsed JSON)
+- Verify the secret matches what you configured
+- Use `hmac.compare_digest()` for comparison
+- Check for character encoding issues
+
+### Timeout Errors
+
+- Your endpoint should respond within 5 seconds
+- Process webhooks asynchronously
+- Return 200 immediately, handle logic in background
+
+## Use Cases
+
+### Slack Notifications
+
+Notify your team when audits complete:
+
+```python
+def handle_audit_completed(data):
+    slack_webhook = "https://hooks.slack.com/..."
+    message = {
+        "text": f"✅ Audit completed for {data['url']}",
+        "blocks": [{
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*SEO Score:* {data['seo_score']}\n*Issues:* {data['issues_found']}"
+            }
+        }]
+    }
+    requests.post(slack_webhook, json=message)
+```
+
+### Automated Reporting
+
+Generate weekly reports when PDFs are ready:
+
+```python
+def handle_pdf_ready(data):
+    pdf_url = data['pdf_url']
+    audit_id = data['audit_id']
+    
+    # Send email with PDF attachment
+    send_email(
+        to="team@example.com",
+        subject=f"Weekly SEO Report - Audit #{audit_id}",
+        body=f"Your report is ready: {pdf_url}"
+    )
+```
+
+### CI/CD Integration
+
+Trigger deployments when GitHub PRs are created:
+
+```python
+def handle_github_pr_created(data):
+    pr_url = data['html_url']
+    repo = data['repository']
+    
+    # Trigger CI pipeline
+    trigger_ci_pipeline(
+        repo=repo,
+        pr_number=data['pr_number'],
+        message=f"SEO fixes applied: {pr_url}"
+    )
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="GitHub Integration" icon="github" href="/integrations/github">
+    Set up GitHub OAuth and PR automation
+  </Card>
+  <Card title="HubSpot Integration" icon="hubspot" href="/integrations/hubspot">
+    Connect HubSpot to apply SEO fixes
+  </Card>
+</CardGroup>

@@ -1,0 +1,336 @@
+---
+title: Audits
+description: Create and manage SEO/GEO audits
+---
+
+## Create Audit
+
+<RequestExample>
+```bash cURL
+curl -X POST https://api.latentgeo.com/api/v1/audits/ \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://example.com",
+    "market": "US",
+    "language": "en",
+    "competitors": ["competitor1.com", "competitor2.com"]
+  }'
+```
+</RequestExample>
+
+<ResponseExample>
+```json
+{
+  "id": 123,
+  "url": "https://example.com",
+  "status": "pending",
+  "progress": 0,
+  "created_at": "2026-03-03T10:00:00Z"
+}
+```
+</ResponseExample>
+
+**POST** `/api/v1/audits/`
+
+Creates a new audit. If competitors and market are provided, the audit pipeline starts immediately. Otherwise, it waits for configuration via chat.
+
+<ParamField body="url" type="string" required>
+  Website URL to audit
+</ParamField>
+
+<ParamField body="market" type="string">
+  Target market (e.g., "US", "UK", "AR")
+</ParamField>
+
+<ParamField body="language" type="string">
+  Content language (e.g., "en", "es", "fr")
+</ParamField>
+
+<ParamField body="competitors" type="array">
+  List of competitor domains
+</ParamField>
+
+<ResponseField name="id" type="integer">
+  Unique audit identifier
+</ResponseField>
+
+<ResponseField name="url" type="string">
+  Audited website URL
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Current status: `pending`, `running`, `completed`, `failed`
+</ResponseField>
+
+<ResponseField name="progress" type="integer">
+  Progress percentage (0-100)
+</ResponseField>
+
+---
+
+## List Audits
+
+**GET** `/api/v1/audits/`
+
+Returns a paginated list of your audits.
+
+<ParamField query="skip" type="integer" default="0">
+  Number of records to skip
+</ParamField>
+
+<ParamField query="limit" type="integer" default="100">
+  Maximum records to return
+</ParamField>
+
+<ResponseField name="audits" type="array">
+  Array of audit summary objects
+</ResponseField>
+
+---
+
+## Get Audit Details
+
+**GET** `/api/v1/audits/{audit_id}`
+
+Returns full audit details including pages, scores, and fix plan.
+
+<ResponseField name="id" type="integer">
+  Audit ID
+</ResponseField>
+
+<ResponseField name="url" type="string">
+  Audited URL
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Current status
+</ResponseField>
+
+<ResponseField name="geo_score" type="number">
+  GEO optimization score (0-100)
+</ResponseField>
+
+<ResponseField name="total_pages" type="integer">
+  Number of pages audited
+</ResponseField>
+
+<ResponseField name="fix_plan" type="array">
+  Actionable fixes with priority levels
+</ResponseField>
+
+<ResponseField name="target_audit" type="object">
+  Detailed audit data for the target site
+</ResponseField>
+
+---
+
+## Get Audit Status
+
+**GET** `/api/v1/audits/{audit_id}/status`
+
+Lightweight endpoint for polling audit progress.
+
+<ResponseField name="id" type="integer">
+  Audit ID
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Current status
+</ResponseField>
+
+<ResponseField name="progress" type="integer">
+  Progress percentage
+</ResponseField>
+
+<ResponseField name="geo_score" type="number">
+  Current GEO score
+</ResponseField>
+
+---
+
+## Get Fix Plan
+
+**GET** `/api/v1/audits/{audit_id}/fix_plan`
+
+Returns the actionable fix plan in JSON format.
+
+<ResponseField name="fix_plan" type="array">
+  Array of fix items with details
+</ResponseField>
+
+---
+
+## Delete Audit
+
+**DELETE** `/api/v1/audits/{audit_id}`
+
+Permanently deletes an audit and associated data.
+
+---
+
+## Get Audit Pages
+
+**GET** `/api/v1/audits/{audit_id}/pages`
+
+Returns all audited pages with scores and issues.
+
+<ResponseField name="pages" type="array">
+  Array of page objects with audit data
+</ResponseField>
+
+---
+
+## Get Competitors
+
+**GET** `/api/v1/audits/{audit_id}/competitors`
+
+Returns competitor analysis data with GEO scores.
+
+<ParamField query="limit" type="integer" default="5">
+  Maximum competitors to return (max: 10)
+</ParamField>
+
+<ResponseField name="competitors" type="array">
+  Array of competitor objects with GEO scores
+</ResponseField>
+
+---
+
+## Run PageSpeed Analysis
+
+**POST** `/api/v1/audits/{audit_id}/pagespeed`
+
+Triggers PageSpeed Insights analysis and returns complete data.
+
+<ParamField query="strategy" type="string" default="both">
+  Analysis strategy: `mobile`, `desktop`, or `both`
+</ParamField>
+
+<ResponseField name="success" type="boolean">
+  Whether analysis completed
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Complete PageSpeed data with all metrics, opportunities, diagnostics
+</ResponseField>
+
+---
+
+## Generate PDF Report
+
+**POST** `/api/v1/audits/{audit_id}/generate-pdf`
+
+Generates a comprehensive PDF report with PageSpeed, keywords, backlinks, and GEO analysis.
+
+<ParamField body="force_pagespeed_refresh" type="boolean" default="true">
+  Force refresh PageSpeed data
+</ParamField>
+
+<ParamField body="force_report_refresh" type="boolean" default="false">
+  Force regenerate report markdown
+</ParamField>
+
+<ParamField body="force_external_intel_refresh" type="boolean" default="false">
+  Force refresh external intelligence data
+</ParamField>
+
+<ResponseField name="success" type="boolean">
+  Whether PDF generation succeeded
+</ResponseField>
+
+<ResponseField name="pdf_path" type="string">
+  Supabase storage path (supabase://...)
+</ResponseField>
+
+<ResponseField name="file_size" type="integer">
+  PDF file size in bytes
+</ResponseField>
+
+<ResponseField name="pagespeed_included" type="boolean">
+  Whether PageSpeed data was included
+</ResponseField>
+
+---
+
+## Download PDF
+
+**GET** `/api/v1/audits/{audit_id}/download-pdf`
+
+Redirects to signed Supabase download URL for the PDF report.
+
+---
+
+## Get PDF Download URL
+
+**GET** `/api/v1/audits/{audit_id}/download-pdf-url`
+
+Returns a signed download URL without redirecting.
+
+<ResponseField name="download_url" type="string">
+  Signed URL valid for 1 hour
+</ResponseField>
+
+<ResponseField name="expires_in_seconds" type="integer">
+  URL expiration time
+</ResponseField>
+
+<ResponseField name="storage_provider" type="string">
+  Storage provider ("supabase")
+</ResponseField>
+
+---
+
+## Configure Audit via Chat
+
+**POST** `/api/v1/audits/chat/config`
+
+Configures audit settings and launches the pipeline.
+
+<ParamField body="audit_id" type="integer" required>
+  Audit ID to configure
+</ParamField>
+
+<ParamField body="language" type="string">
+  Content language
+</ParamField>
+
+<ParamField body="competitors" type="array">
+  Competitor domains
+</ParamField>
+
+<ParamField body="market" type="string">
+  Target market
+</ParamField>
+
+---
+
+## Error Codes
+
+<ResponseField name="400" type="error">
+  Bad request or invalid parameters
+</ResponseField>
+
+<ResponseField name="401" type="error">
+  Missing or invalid authentication token
+</ResponseField>
+
+<ResponseField name="403" type="error">
+  Access denied (cross-user access)
+</ResponseField>
+
+<ResponseField name="404" type="error">
+  Audit not found
+</ResponseField>
+
+<ResponseField name="409" type="error">
+  PDF generation already in progress
+</ResponseField>
+
+<ResponseField name="422" type="error">
+  Missing required fix inputs
+</ResponseField>
+
+<ResponseField name="503" type="error">
+  Database or Redis temporarily unavailable
+</ResponseField>

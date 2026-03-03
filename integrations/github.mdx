@@ -1,0 +1,514 @@
+---
+title: 'GitHub Integration'
+description: 'Connect GitHub to audit blog content and create PRs with automated SEO/GEO fixes'
+icon: 'github'
+---
+
+## Overview
+
+The GitHub integration allows you to:
+
+- Connect your GitHub account via OAuth
+- Sync and analyze repositories
+- Audit blog content directly from GitHub repos
+- Create pull requests with automated SEO/GEO fixes
+- Monitor PR status and webhook events
+
+<Warning>
+  All GitHub connections are user-owned. In production, legacy ownerless connections are automatically blocked. OAuth requires authentication for both the authorization URL and callback.
+</Warning>
+
+## OAuth Setup Workflow
+
+<Steps>
+  <Step title="Request Authorization URL">
+    Call the `/api/github/auth-url` endpoint with your JWT bearer token:
+
+    ```bash
+    curl -H "Authorization: Bearer YOUR_TOKEN" \
+      https://api.latentgeo.com/api/github/auth-url
+    ```
+
+    Response:
+    ```json
+    {
+      "url": "https://github.com/login/oauth/authorize?...",
+      "state": "eyJhbGciOiJIUzI1NiIs..."
+    }
+    ```
+
+    The `state` parameter is a **signed, time-limited token** (valid for 10 minutes) that prevents CSRF attacks.
+  </Step>
+
+  <Step title="Redirect User to GitHub">
+    Redirect your user to the returned `url`. They'll authorize your app to access their GitHub account.
+  </Step>
+
+  <Step title="Handle OAuth Callback">
+    GitHub redirects back with a `code` and `state`. Post these to `/api/github/callback`:
+
+    ```bash
+    curl -X POST \
+      -H "Authorization: Bearer YOUR_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d '{"code":"oauth_code","state":"signed_state"}' \
+      https://api.latentgeo.com/api/github/callback
+    ```
+
+    Response:
+    ```json
+    {
+      "status": "success",
+      "connection_id": "conn_abc123",
+      "username": "octocat"
+    }
+    ```
+  </Step>
+
+  <Step title="Sync Repositories">
+    After connection, repositories are synced automatically in the background. You can manually trigger a sync:
+
+    ```bash
+    curl -X POST \
+      -H "Authorization: Bearer YOUR_TOKEN" \
+      https://api.latentgeo.com/api/github/sync/CONNECTION_ID
+    ```
+  </Step>
+</Steps>
+
+## OAuth Security Contract
+
+<Warning>
+  **Signed State Tokens**: The OAuth `state` parameter is cryptographically signed and includes:
+  - User ID and email
+  - Service identifier (`github`)
+  - Expiration timestamp (10 minutes)
+  
+  Callbacks with invalid or expired state tokens are rejected with `400` or `401` errors.
+</Warning>
+
+### Security Features
+
+- **User binding**: State tokens are tied to the authenticated user
+- **Time-limited**: Tokens expire after 10 minutes
+- **Signature verification**: HMAC-SHA256 prevents tampering
+- **Cross-user protection**: Callbacks validate the user matches the original requester
+
+## Connecting GitHub Accounts
+
+### List Connections
+
+Retrieve all active GitHub connections for the authenticated user:
+
+```bash
+GET /api/github/connections
+```
+
+Response:
+```json
+[
+  {
+    "id": "conn_abc123",
+    "username": "octocat",
+    "account_type": "User",
+    "created_at": "2024-01-15T10:30:00Z"
+  }
+]
+```
+
+### Sync Repositories
+
+Manually sync repositories for a connection:
+
+```bash
+POST /api/github/sync/{connection_id}
+```
+
+Response:
+```json
+{
+  "status": "success",
+  "synced_count": 15
+}
+```
+
+### Get Repositories
+
+List all synced repositories:
+
+```bash
+GET /api/github/repos/{connection_id}
+```
+
+Response:
+```json
+[
+  {
+    "id": "repo_xyz789",
+    "full_name": "octocat/blog",
+    "name": "blog",
+    "owner": "octocat",
+    "url": "https://github.com/octocat/blog",
+    "homepage_url": "https://octocat.dev",
+    "site_type": "nextjs",
+    "auto_audit": true,
+    "auto_pr": false
+  }
+]
+```
+
+## Blog Content Auditing
+
+### Analyze Repository
+
+Detect the site framework and structure:
+
+```bash
+POST /api/github/analyze/{connection_id}/{repo_id}
+```
+
+Response:
+```json
+{
+  "id": "repo_xyz789",
+  "full_name": "octocat/blog",
+  "site_type": "nextjs",
+  "build_command": "npm run build",
+  "output_dir": "out"
+}
+```
+
+### Audit All Blogs
+
+Run a comprehensive SEO audit on all blog posts:
+
+```bash
+POST /api/github/audit-blogs/{connection_id}/{repo_id}
+```
+
+This automatically:
+- Detects all blog files based on the framework (Next.js, Gatsby, Hugo, etc.)
+- Analyzes each post for SEO issues
+- Returns a detailed report with issues per blog
+
+Response:
+```json
+{
+  "total_blogs": 12,
+  "blogs_with_issues": 8,
+  "total_issues": 34,
+  "blogs": [
+    {
+      "path": "content/posts/intro-to-seo.md",
+      "title": "Introduction to SEO",
+      "issues": [
+        {
+          "code": "MISSING_META_DESCRIPTION",
+          "severity": "high",
+          "message": "Meta description is missing"
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Audit with GEO (Generative Engine Optimization)
+
+For advanced LLM optimization:
+
+```bash
+POST /api/github/audit-blogs-geo/{connection_id}/{repo_id}
+```
+
+GEO audits detect additional issues beyond traditional SEO:
+- Q&A format optimization (LLMs prefer question-answer structure)
+- E-E-A-T signals (Experience, Expertise, Authority, Trust)
+- Snippet-level clarity
+- Conversational language vs keyword stuffing
+- Direct answer formatting (inverted pyramid)
+
+## Creating Pull Requests with Fixes
+
+### From Blog Audits
+
+Create a PR with automated fixes for specific blogs:
+
+```bash
+POST /api/github/create-blog-fixes-pr/{connection_id}/{repo_id}
+```
+
+Body:
+```json
+{
+  "blog_paths": [
+    "content/posts/intro-to-seo.md",
+    "content/posts/keyword-research.md"
+  ]
+}
+```
+
+Response:
+```json
+{
+  "status": "success",
+  "pr": {
+    "id": "pr_123",
+    "pr_number": 42,
+    "title": "SEO improvements for 2 blog posts",
+    "html_url": "https://github.com/octocat/blog/pull/42",
+    "status": "open",
+    "files_changed": 2
+  },
+  "fixes_applied": 12,
+  "blogs_fixed": 2
+}
+```
+
+### With GEO Fixes
+
+Include both SEO and GEO optimizations:
+
+```bash
+POST /api/github/create-geo-fixes-pr/{connection_id}/{repo_id}
+```
+
+Body:
+```json
+{
+  "blog_paths": ["content/posts/intro-to-seo.md"],
+  "include_geo": true
+}
+```
+
+Response:
+```json
+{
+  "status": "success",
+  "pr": { /* ... */ },
+  "fixes_applied": 18,
+  "seo_fixes": 10,
+  "geo_fixes": 8,
+  "blogs_fixed": 1,
+  "geo_enabled": true
+}
+```
+
+### From Existing Audits
+
+Create a PR based on a completed site audit:
+
+```bash
+POST /api/github/create-auto-fix-pr/{connection_id}/{repo_id}
+```
+
+Body:
+```json
+{
+  "audit_id": 123
+}
+```
+
+<Info>
+  Before creating a PR, ensure all required fix inputs are provided. Use `/api/github/fix-inputs/{audit_id}` to check for missing inputs.
+</Info>
+
+### List Pull Requests
+
+Get all PRs created for a repository:
+
+```bash
+GET /api/github/prs/{repo_id}
+```
+
+Response:
+```json
+[
+  {
+    "id": "pr_123",
+    "pr_number": 42,
+    "title": "SEO improvements for blog posts",
+    "html_url": "https://github.com/octocat/blog/pull/42",
+    "status": "merged",
+    "files_changed": 5,
+    "expected_improvements": {
+      "seo_score_increase": 15,
+      "geo_score_increase": 8
+    }
+  }
+]
+```
+
+## Fix Input Management
+
+### Check Required Inputs
+
+Before creating automated PRs, check if user input is needed:
+
+```bash
+GET /api/github/fix-inputs/{audit_id}
+```
+
+Response:
+```json
+{
+  "audit_id": 123,
+  "missing_inputs": [
+    {
+      "id": "input_1",
+      "issue_code": "MISSING_ALT_TEXT",
+      "page_path": "/blog/intro",
+      "required": true,
+      "prompt": "Provide alt text for the hero image",
+      "fields": [
+        {
+          "key": "alt_text",
+          "label": "Alt Text",
+          "value": "",
+          "placeholder": "A person using a laptop",
+          "required": true,
+          "input_type": "text"
+        }
+      ]
+    }
+  ],
+  "missing_required": 1
+}
+```
+
+### Submit Fix Inputs
+
+Provide missing information:
+
+```bash
+POST /api/github/fix-inputs/{audit_id}
+```
+
+Body:
+```json
+{
+  "inputs": [
+    {
+      "id": "input_1",
+      "issue_code": "MISSING_ALT_TEXT",
+      "page_path": "/blog/intro",
+      "values": {
+        "alt_text": "Developer working on SEO optimization"
+      }
+    }
+  ]
+}
+```
+
+### AI-Assisted Input Chat
+
+Get LLM suggestions for missing inputs based on audit evidence:
+
+```bash
+POST /api/github/fix-inputs/chat/{audit_id}
+```
+
+Body:
+```json
+{
+  "issue_code": "MISSING_ALT_TEXT",
+  "field_key": "alt_text",
+  "field_label": "Alt Text",
+  "placeholder": "A person using a laptop",
+  "current_values": {},
+  "language": "en",
+  "history": [
+    {
+      "role": "user",
+      "content": "What should the alt text be?"
+    }
+  ]
+}
+```
+
+Response:
+```json
+{
+  "assistant_message": "Based on the page content about SEO tools, the hero image should describe the visual context.",
+  "suggested_value": "Developer analyzing website metrics on a laptop screen",
+  "confidence": "evidence"
+}
+```
+
+## Webhook Events
+
+<Info>
+  LatentGEO can receive GitHub webhooks to automate workflows. See the [Webhooks](/integrations/webhooks) page for setup details.
+</Info>
+
+Supported GitHub events:
+
+- `push`: Auto-audit when code is pushed (if `auto_audit` is enabled)
+- `pull_request`: Update PR status in the database
+- `installation`: Handle GitHub App installation/uninstallation
+
+### Webhook Endpoint
+
+```bash
+POST /api/github/webhook
+```
+
+Headers:
+- `X-GitHub-Event`: Event type (push, pull_request, etc.)
+- `X-Hub-Signature-256`: HMAC-SHA256 signature for verification
+
+<Warning>
+  Webhook signatures are verified using `GITHUB_WEBHOOK_SECRET`. In production, this must be configured. In debug mode, webhooks are accepted without verification.
+</Warning>
+
+## Auto-Audit Configuration
+
+Enable automatic audits when code is pushed:
+
+```json
+{
+  "auto_audit": true,
+  "auto_pr": false
+}
+```
+
+- `auto_audit`: Trigger audit on push events
+- `auto_pr`: Automatically create PRs with fixes (coming soon)
+
+## Common Errors
+
+### 401 Unauthorized
+- Missing or invalid JWT token
+- OAuth state token expired or tampered with
+- User mismatch between OAuth start and callback
+
+### 403 Forbidden
+- Attempting to access another user's connection
+- Legacy ownerless connection in production mode
+
+### 404 Not Found
+- Repository or connection not found
+- PR not found
+
+### 422 Unprocessable Entity
+- Missing required fix inputs
+- Use `/api/github/fix-inputs/{audit_id}` to resolve
+
+## Best Practices
+
+1. **Always validate state tokens**: Never skip the state parameter in OAuth flows
+2. **Check for required inputs**: Before creating PRs, call the fix-inputs endpoint
+3. **Use GEO audits for content sites**: Blogs and content marketing benefit most from GEO optimization
+4. **Monitor webhook health**: Set up `/webhooks/health` monitoring
+5. **Review PRs before merging**: Automated fixes should always be reviewed by humans
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Webhooks" icon="webhook" href="/integrations/webhooks">
+    Set up webhook integrations for automation
+  </Card>
+  <Card title="HubSpot Integration" icon="hubspot" href="/integrations/hubspot">
+    Connect HubSpot to apply SEO fixes directly
+  </Card>
+</CardGroup>

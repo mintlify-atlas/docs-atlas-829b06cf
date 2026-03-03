@@ -1,0 +1,513 @@
+---
+title: 'Frontend Architecture'
+description: 'Next.js App Router frontend architecture and patterns'
+icon: 'browser'
+---
+
+## Next.js Frontend
+
+The frontend is a modern Next.js 16 application using the App Router, React 19, and a comprehensive UI component library built on Radix UI primitives.
+
+## Technology Stack
+
+### Core Dependencies
+
+```json package.json
+{
+  "dependencies": {
+    // Framework
+    "next": "^16.1.6",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    
+    // Data Fetching
+    "@tanstack/react-query": "^5.90.10",
+    "openapi-fetch": "^0.14.0",
+    
+    // UI Components
+    "@radix-ui/react-*": "^1.x.x",  // 30+ components
+    "lucide-react": "^0.553.0",
+    "next-themes": "^0.4.6",
+    
+    // Forms
+    "react-hook-form": "^7.66.0",
+    "@hookform/resolvers": "^3.10.0",
+    "zod": "3.25.76",
+    
+    // Auth
+    "@auth0/nextjs-auth0": "^4.13.1",
+    
+    // Styling
+    "tailwindcss": "^4.1.16",
+    "tailwind-merge": "^3.4.0",
+    "class-variance-authority": "^0.7.1",
+    
+    // Charts & Visualization
+    "recharts": "^3.4.1"
+  }
+}
+```
+
+## Application Structure
+
+```
+frontend/
+├── app/
+│   ├── layout.tsx                 # Root layout
+│   ├── [locale]/
+│   │   ├── layout.tsx             # Locale-specific layout
+│   │   ├── page.tsx               # Home page
+│   │   ├── dashboard/             # Dashboard routes
+│   │   ├── audits/                # Audit routes
+│   │   └── api/                   # API routes (SSE proxy)
+│   └── globals.css                # Global styles
+├── components/
+│   ├── ui/                        # Shadcn UI components
+│   │   ├── button.tsx
+│   │   ├── card.tsx
+│   │   ├── dialog.tsx
+│   │   └── ...                    # 40+ components
+│   ├── providers/
+│   │   ├── query-provider.tsx     # TanStack Query setup
+│   │   └── analytics-provider.tsx # Analytics integration
+│   ├── theme-provider.tsx         # Theme context
+│   └── audit-chat-flow.tsx        # Domain components
+├── hooks/
+│   ├── useAuditSSE.ts             # SSE real-time hook
+│   └── ...                        # Other hooks
+├── lib/
+│   ├── api-client/                # Generated API client
+│   ├── api.ts                     # Legacy API service
+│   ├── backend-auth.ts            # Auth wrapper
+│   ├── env.ts                     # Environment config
+│   ├── logger.ts                  # Client logging
+│   ├── brand.ts                   # Brand configuration
+│   └── utils.ts                   # Utility functions
+├── __tests__/                     # Test files
+├── scripts/
+│   └── generate-api-client.mjs    # OpenAPI code generation
+├── public/                        # Static assets
+├── next.config.js                 # Next.js configuration
+├── tailwind.config.ts             # Tailwind configuration
+└── package.json                   # Dependencies
+```
+
+## App Router Architecture
+
+LatentGEO uses the Next.js App Router with React Server Components:
+
+### Root Layout
+
+```tsx app/layout.tsx
+import { ThemeProvider } from "@/components/theme-provider";
+import { QueryProvider } from "@/components/providers/query-provider";
+
+export default async function RootLayout({
+  children,
+  params,
+}: {
+  children: React.ReactNode;
+  params?: Promise<{ locale?: string }>;
+}) {
+  const resolvedParams = params ? await params : undefined;
+  const locale = resolvedParams?.locale || "en";
+  
+  return (
+    <html lang={locale} suppressHydrationWarning>
+      <body className="font-sans antialiased min-h-screen">
+        <QueryProvider>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="light"
+            storageKey="latentgeo-theme-v2"
+          >
+            {children}
+          </ThemeProvider>
+        </QueryProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+**Features:**
+- Font optimization (Sora, Manrope, JetBrains Mono)
+- Theme persistence
+- Locale support
+- Query client provider
+- Analytics integration
+
+## API Client Generation
+
+The frontend uses `openapi-fetch` for type-safe API calls generated from the backend's OpenAPI schema:
+
+```bash scripts/generate-api-client.mjs
+#!/usr/bin/env node
+import openapiTS from "openapi-typescript";
+import fs from "fs";
+
+const BACKEND_URL = process.env.API_URL || "http://localhost:8000";
+const OUTPUT_PATH = "./lib/api-client/schema.ts";
+
+const schema = await openapiTS(`${BACKEND_URL}/openapi.json`);
+fs.writeFileSync(OUTPUT_PATH, schema);
+
+console.log("✅ API client types generated");
+```
+
+**Usage:**
+
+```typescript
+import createClient from "openapi-fetch";
+import type { paths } from "@/lib/api-client/schema";
+
+const client = createClient<paths>({
+  baseUrl: process.env.NEXT_PUBLIC_API_URL,
+});
+
+// Type-safe API calls
+const { data, error } = await client.GET("/api/v1/audits/{audit_id}", {
+  params: { path: { audit_id: 123 } },
+});
+```
+
+**Benefits:**
+- Full TypeScript type safety
+- Auto-complete for endpoints and parameters
+- Compile-time error detection
+- Schema validation
+
+## Data Fetching with TanStack Query
+
+TanStack Query (React Query) handles server state management:
+
+```tsx components/providers/query-provider.tsx
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60 * 1000,        // 1 minute
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
+
+export function QueryProvider({ children }: { children: React.ReactNode }) {
+  return (
+    <QueryClientProvider client={queryClient}>
+      {children}
+      <ReactQueryDevtools initialIsOpen={false} />
+    </QueryClientProvider>
+  );
+}
+```
+
+**Example usage:**
+
+```tsx
+import { useQuery } from "@tanstack/react-query";
+import { fetchWithBackendAuth } from "@/lib/backend-auth";
+
+function AuditDetail({ auditId }: { auditId: number }) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["audit", auditId],
+    queryFn: async () => {
+      const res = await fetchWithBackendAuth(
+        `${API_URL}/api/v1/audits/${auditId}`
+      );
+      return res.json();
+    },
+  });
+  
+  if (isLoading) return <Spinner />;
+  if (error) return <Error error={error} />;
+  
+  return <AuditDetails audit={data} />;
+}
+```
+
+## Component Architecture
+
+### UI Component Library
+
+Built on Radix UI primitives with Tailwind CSS styling (Shadcn UI pattern):
+
+```tsx components/ui/button.tsx
+import { cva, type VariantProps } from "class-variance-authority";
+import { cn } from "@/lib/utils";
+
+const buttonVariants = cva(
+  "inline-flex items-center justify-center rounded-md",
+  {
+    variants: {
+      variant: {
+        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        destructive: "bg-destructive text-destructive-foreground",
+        outline: "border border-input bg-background hover:bg-accent",
+        ghost: "hover:bg-accent hover:text-accent-foreground",
+      },
+      size: {
+        default: "h-10 px-4 py-2",
+        sm: "h-9 px-3",
+        lg: "h-11 px-8",
+        icon: "h-10 w-10",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+      size: "default",
+    },
+  }
+);
+
+interface ButtonProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+    VariantProps<typeof buttonVariants> {}
+
+export function Button({ className, variant, size, ...props }: ButtonProps) {
+  return (
+    <button
+      className={cn(buttonVariants({ variant, size, className }))}
+      {...props}
+    />
+  );
+}
+```
+
+**Available UI components (40+):**
+- Button, Card, Dialog, Dropdown Menu
+- Accordion, Tabs, Toast, Tooltip
+- Form, Input, Select, Checkbox
+- Progress, Slider, Switch
+- And many more...
+
+### Domain Components
+
+Business logic components for specific features:
+
+```tsx components/audit-chat-flow.tsx
+import { useAuditSSE } from "@/hooks/useAuditSSE";
+
+export function AuditChatFlow({ auditId }: { auditId: number }) {
+  const { lastMessage, isConnected, useFallback } = useAuditSSE(auditId, {
+    onComplete: (data) => {
+      toast.success("Audit completed!");
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
+  
+  return (
+    <div>
+      <StatusBadge 
+        status={lastMessage?.status} 
+        isLive={isConnected} 
+      />
+      <ProgressBar progress={lastMessage?.progress} />
+      {useFallback && <FallbackIndicator />}
+    </div>
+  );
+}
+```
+
+## Theming System
+
+Custom theming with `next-themes` and CSS variables:
+
+```tsx components/theme-provider.tsx
+import { ThemeProvider as NextThemesProvider } from "next-themes";
+
+export function ThemeProvider({ children, ...props }) {
+  return <NextThemesProvider {...props}>{children}</NextThemesProvider>;
+}
+```
+
+**Theme configuration:**
+
+```css app/globals.css
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+    /* ... more color variables */
+  }
+  
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    /* ... more color variables */
+  }
+}
+```
+
+**Usage:**
+
+```tsx
+import { useTheme } from "next-themes";
+
+function ThemeToggle() {
+  const { theme, setTheme } = useTheme();
+  
+  return (
+    <Button onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
+      Toggle Theme
+    </Button>
+  );
+}
+```
+
+## Form Handling
+
+Type-safe forms with React Hook Form + Zod:
+
+```tsx
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+
+const auditSchema = z.object({
+  url: z.string().url("Invalid URL"),
+  competitors: z.array(z.string().url()).max(5),
+  language: z.enum(["en", "es", "fr"]),
+});
+
+type AuditForm = z.infer<typeof auditSchema>;
+
+function CreateAuditForm() {
+  const form = useForm<AuditForm>({
+    resolver: zodResolver(auditSchema),
+    defaultValues: {
+      url: "",
+      competitors: [],
+      language: "en",
+    },
+  });
+  
+  const onSubmit = (data: AuditForm) => {
+    // Type-safe data
+    createAudit.mutate(data);
+  };
+  
+  return (
+    <form onSubmit={form.handleSubmit(onSubmit)}>
+      {/* Form fields */}
+    </form>
+  );
+}
+```
+
+## Environment Configuration
+
+Environment variables are resolved with fallbacks:
+
+```typescript lib/env.ts
+export function resolveApiBaseUrl(): string {
+  // Server-side: use internal Docker network
+  if (typeof window === "undefined") {
+    return process.env.API_URL || "http://backend:8000";
+  }
+  
+  // Client-side: use public URL
+  return (
+    process.env.NEXT_PUBLIC_API_URL ||
+    process.env.NEXT_PUBLIC_BACKEND_URL ||
+    "http://localhost:8000"
+  );
+}
+```
+
+**Environment variables:**
+
+```bash
+# Server-side (internal)
+API_URL=http://backend:8000
+
+# Client-side (browser)
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+```
+
+## Authentication Integration
+
+Auth0 integration with automatic token management:
+
+```typescript lib/backend-auth.ts
+import { getAccessToken } from "@auth0/nextjs-auth0";
+
+export async function fetchWithBackendAuth(
+  url: string,
+  options?: RequestInit
+): Promise<Response> {
+  const { accessToken } = await getAccessToken();
+  
+  return fetch(url, {
+    ...options,
+    headers: {
+      ...options?.headers,
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+}
+```
+
+## Building & Deployment
+
+### Development
+
+```bash
+pnpm dev
+```
+
+### Production Build
+
+```bash
+pnpm build
+pnpm start
+```
+
+### Docker (Recommended)
+
+```bash
+docker compose up frontend -d
+```
+
+### Type Checking
+
+```bash
+pnpm type-check
+```
+
+### Linting & Formatting
+
+```bash
+pnpm lint
+pnpm format:check
+```
+
+## Performance Optimization
+
+- **Font optimization**: Next.js font loading with `next/font`
+- **Image optimization**: `next/image` for automatic optimization
+- **Code splitting**: Automatic with App Router
+- **Tree shaking**: Unused code elimination
+- **Bundle analysis**: Monitor bundle size
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Backend Architecture" icon="server" href="/architecture/backend">
+    Learn about the FastAPI backend
+  </Card>
+  <Card title="Real-time System" icon="bolt" href="/architecture/real-time">
+    Deep dive into SSE implementation
+  </Card>
+</CardGroup>

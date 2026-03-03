@@ -1,0 +1,190 @@
+---
+title: "LLM Visibility API"
+description: "Check brand visibility in AI language model responses"
+---
+
+## Check Visibility
+
+<RequestExample>
+```bash POST /llm-visibility/check/{audit_id}
+curl -X POST "https://api.latentgeo.com/llm-visibility/check/123?brand_name=Example%20Corp" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "queries": [
+      "What are the best SEO tools?",
+      "How to improve website performance?",
+      "Top website audit platforms"
+    ]
+  }'
+```
+</RequestExample>
+
+Check if a brand is mentioned in AI language model responses to specific queries.
+
+### Path Parameters
+
+<ParamField path="audit_id" type="integer" required>
+  The ID of the audit to check visibility for
+</ParamField>
+
+### Query Parameters
+
+<ParamField query="brand_name" type="string" required>
+  Brand name to check visibility for in LLM responses
+</ParamField>
+
+### Request Body
+
+<ParamField body="queries" type="array" required>
+  Array of queries to test against various LLMs
+</ParamField>
+
+### Response
+
+Returns an array of visibility records showing if and how the brand appears in LLM responses.
+
+<ResponseField name="id" type="integer">
+  Unique identifier for the visibility record
+</ResponseField>
+
+<ResponseField name="audit_id" type="integer">
+  The audit ID this visibility check belongs to
+</ResponseField>
+
+<ResponseField name="llm_name" type="string">
+  Name of the LLM tested (e.g., "GPT-4", "Claude", "Gemini")
+</ResponseField>
+
+<ResponseField name="query" type="string">
+  The query that was tested
+</ResponseField>
+
+<ResponseField name="is_visible" type="boolean">
+  Whether the brand was mentioned in the LLM's response
+</ResponseField>
+
+<ResponseField name="rank" type="integer" optional>
+  Position where the brand was mentioned (1 = first mention)
+</ResponseField>
+
+<ResponseField name="citation_text" type="string" optional>
+  The exact text snippet where the brand was mentioned
+</ResponseField>
+
+<ResponseField name="checked_at" type="string">
+  Timestamp when the visibility was checked (ISO 8601 format)
+</ResponseField>
+
+<ResponseExample>
+```json Response
+[
+  {
+    "id": 1,
+    "audit_id": 123,
+    "llm_name": "GPT-4",
+    "query": "What are the best SEO tools?",
+    "is_visible": true,
+    "rank": 3,
+    "citation_text": "Example Corp offers comprehensive SEO audit capabilities...",
+    "checked_at": "2026-03-03T10:30:00Z"
+  },
+  {
+    "id": 2,
+    "audit_id": 123,
+    "llm_name": "Claude",
+    "query": "What are the best SEO tools?",
+    "is_visible": false,
+    "rank": null,
+    "citation_text": null,
+    "checked_at": "2026-03-03T10:30:00Z"
+  },
+  {
+    "id": 3,
+    "audit_id": 123,
+    "llm_name": "Gemini",
+    "query": "Top website audit platforms",
+    "is_visible": true,
+    "rank": 1,
+    "citation_text": "Example Corp is a leading platform for website auditing...",
+    "checked_at": "2026-03-03T10:31:00Z"
+  }
+]
+```
+</ResponseExample>
+
+### Error Codes
+
+<ResponseField name="401" type="error">
+  Unauthorized - Invalid or missing authentication token
+</ResponseField>
+
+<ResponseField name="403" type="error">
+  Forbidden - User does not have access to this audit
+</ResponseField>
+
+<ResponseField name="404" type="error">
+  Not Found - Audit ID does not exist
+</ResponseField>
+
+<ResponseField name="502" type="error">
+  Bad Gateway - Kimi AI generation failed. Error code: `KIMI_GENERATION_FAILED`
+</ResponseField>
+
+<ResponseField name="503" type="error">
+  Service Unavailable - Kimi provider not configured. Error code: `KIMI_UNAVAILABLE`. Ensure `NV_API_KEY_ANALYSIS`, `NVIDIA_API_KEY`, or `NV_API_KEY` is set.
+</ResponseField>
+
+---
+
+## Get Visibility
+
+<RequestExample>
+```bash GET /llm-visibility/{audit_id}
+curl -X GET "https://api.latentgeo.com/llm-visibility/123" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+</RequestExample>
+
+Retrieve stored LLM visibility data for an audit.
+
+### Path Parameters
+
+<ParamField path="audit_id" type="integer" required>
+  The ID of the audit to retrieve visibility data for
+</ParamField>
+
+### Response
+
+Returns an array of visibility objects with the same structure as the check endpoint.
+
+<ResponseExample>
+```json Response
+[
+  {
+    "id": 1,
+    "audit_id": 123,
+    "llm_name": "GPT-4",
+    "query": "What are the best SEO tools?",
+    "is_visible": true,
+    "rank": 3,
+    "citation_text": "Example Corp offers comprehensive SEO audit capabilities...",
+    "checked_at": "2026-03-03T10:30:00Z"
+  }
+]
+```
+</ResponseExample>
+
+### Error Codes
+
+<ResponseField name="401" type="error">
+  Unauthorized - Invalid or missing authentication token
+</ResponseField>
+
+<ResponseField name="403" type="error">
+  Forbidden - User does not have access to this audit
+</ResponseField>
+
+<ResponseField name="404" type="error">
+  Not Found - Audit ID does not exist
+</ResponseField>

@@ -1,0 +1,457 @@
+---
+title: 'Docker Deployment'
+description: 'Deploy LatentGEO using Docker Compose for local development and production environments'
+---
+
+## Overview
+
+LatentGEO supports two canonical Docker deployment modes:
+
+1. **Standard Mode** (`docker-compose.yml`) - Production-ready containerized deployment
+2. **Development Mode** (`docker-compose.dev.yml`) - Hot reload for active development
+
+<Note>
+  Both modes use Supabase for PostgreSQL and Storage, with Redis for caching and SSE (Server-Sent Events).
+</Note>
+
+## Standard Mode (Production)
+
+### Configuration
+
+The standard mode uses `docker-compose.yml` with the following characteristics:
+
+- Backend and worker containers without code mounts
+- Frontend in production mode (optimized build)
+- Server-side API URL: `http://backend:8000`
+- Browser-side API URL: `http://localhost:8000`
+
+### Quick Start
+
+<Steps>
+  <Step title="Prepare environment file">
+    Copy `.env.example` to `.env` and configure your environment variables:
+    
+    ```bash
+    cp .env.example .env
+    ```
+    
+    Key variables:
+    - `DATABASE_URL` - Your Supabase PostgreSQL connection string
+    - `REDIS_URL` - Redis connection URL (default: `redis://redis:6379/0`)
+    - `SSE_SOURCE` - SSE source (`redis` or `db`, default: `redis`)
+    - `SUPABASE_URL` - Your Supabase project URL
+    - `SUPABASE_KEY` - Your Supabase anon key
+    - `SUPABASE_SERVICE_ROLE_KEY` - Your Supabase service role key
+  </Step>
+  
+  <Step title="Start services">
+    Build and start all containers:
+    
+    ```bash
+    docker compose up --build -d
+    ```
+  </Step>
+  
+  <Step title="Verify deployment">
+    Check container status:
+    
+    ```bash
+    docker compose ps
+    ```
+    
+    Test the backend health endpoint:
+    
+    ```bash
+    curl http://localhost:8000/health
+    ```
+  </Step>
+</Steps>
+
+### Services
+
+#### Backend
+
+- **Image**: Built from `Dockerfile.backend`
+- **Port**: 8000
+- **Command**: `uvicorn app.main:app --host 0.0.0.0 --port 8000`
+- **Health Check**: `GET /health/live` every 30s
+
+#### Frontend
+
+- **Image**: Built from `Dockerfile.frontend`
+- **Port**: 3000
+- **Mode**: Production (optimized build)
+- **Environment**:
+  - `API_URL=http://backend:8000` (server-side)
+  - `NEXT_PUBLIC_API_URL=http://localhost:8000` (browser)
+
+#### Worker (Celery)
+
+- **Image**: Built from `Dockerfile.backend`
+- **Command**: `celery -A app.workers.tasks worker --loglevel=info --concurrency=2 --prefetch-multiplier=1 --max-tasks-per-child=20`
+- **Resources**: 2GB memory limit, 512MB reservation
+
+#### Redis
+
+- **Image**: `redis:7-alpine`
+- **Port**: 6379 (internal)
+- **Purpose**: Caching, Celery broker, SSE events
+
+<Warning>
+  The local PostgreSQL service uses the `legacy-local-db` profile and is disabled by default. Use Supabase for database hosting.
+</Warning>
+
+## Development Mode
+
+### Configuration
+
+The development mode uses `docker-compose.dev.yml` with:
+
+- Hot reload for backend (FastAPI with `--reload`)
+- Hot reload for frontend (Next.js dev server)
+- Code mounted as volumes for instant changes
+- Optimized for fast iteration
+
+### Quick Start
+
+<Steps>
+  <Step title="Prepare environment">
+    Ensure `.env` is configured with development settings:
+    
+    ```bash
+    DEBUG=True
+    ENVIRONMENT=development
+    SSE_SOURCE=redis
+    ```
+  </Step>
+  
+  <Step title="Start in development mode">
+    ```bash
+    docker compose -f docker-compose.dev.yml up --build
+    ```
+    
+    <Note>
+      Omit the `-d` flag to see logs in real-time during development.
+    </Note>
+  </Step>
+  
+  <Step title="Access services">
+    - Frontend: http://localhost:3000
+    - Backend: http://localhost:8000
+    - API Docs: http://localhost:8000/docs
+  </Step>
+</Steps>
+
+### Development Features
+
+#### Backend Hot Reload
+
+```yaml
+command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app
+volumes:
+  - ./backend:/app:cached
+  - ./logs:/app/logs:cached
+```
+
+#### Frontend Hot Reload
+
+```yaml
+environment:
+  WATCHPACK_POLLING: "true"
+  CHOKIDAR_USEPOLLING: "true"
+volumes:
+  - ./frontend:/app:delegated
+  - frontend_node_modules:/app/node_modules
+```
+
+#### Resource Limits
+
+- **Backend**: 2 CPU / 1GB memory
+- **Frontend**: 2 CPU / 2GB memory
+- **Worker**: 1 CPU / 512MB memory
+- **Redis**: 0.5 CPU / 256MB memory
+
+## Environment Variables
+
+### Database & Cache
+
+```bash
+DATABASE_URL=postgresql+psycopg2://user:pass@host:5432/db
+DB_POOL_SIZE=5
+DB_MAX_OVERFLOW=5
+DB_POOL_TIMEOUT=15
+DB_POOL_RECYCLE=900
+DB_CONNECT_TIMEOUT_SECONDS=5
+DB_POOL_PRE_PING=false
+REDIS_URL=redis://redis:6379/0
+CELERY_BROKER_URL=redis://redis:6379/0
+CELERY_RESULT_BACKEND=redis://redis:6379/1
+```
+
+### SSE Configuration
+
+```bash
+SSE_SOURCE=redis
+SSE_FALLBACK_DB_INTERVAL_SECONDS=10
+SSE_HEARTBEAT_SECONDS=30
+SSE_RETRY_MS=5000
+```
+
+<Note>
+  SSE (Server-Sent Events) provides real-time progress updates for audits. Redis is the primary source with automatic database fallback.
+</Note>
+
+### Supabase
+
+```bash
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+SUPABASE_JWT_SECRET=your-jwt-secret
+SUPABASE_STORAGE_BUCKET=audit-reports
+```
+
+### Auth0
+
+```bash
+AUTH0_DOMAIN=your-domain.auth0.com
+AUTH0_ISSUER_BASE_URL=https://your-domain.auth0.com
+AUTH0_API_AUDIENCE=your-api-audience
+AUTH0_API_SCOPES=read:app
+AUTH0_EXPECTED_CLIENT_ID=your-client-id
+```
+
+### API Keys
+
+```bash
+GOOGLE_API_KEY=your-google-api-key
+CSE_ID=your-cse-id
+SERPER_API_KEY=your-serper-key
+NVIDIA_API_KEY=your-nvidia-key
+GOOGLE_PAGESPEED_API_KEY=your-pagespeed-key
+```
+
+## Troubleshooting
+
+### Container Issues
+
+<Steps>
+  <Step title="Check container logs">
+    ```bash
+    # All services
+    docker compose logs -f
+    
+    # Specific service
+    docker compose logs -f backend
+    docker compose logs -f frontend
+    docker compose logs -f worker
+    ```
+  </Step>
+  
+  <Step title="Verify container health">
+    ```bash
+    docker compose ps
+    ```
+    
+    Look for "healthy" status on backend container.
+  </Step>
+  
+  <Step title="Restart services">
+    ```bash
+    docker compose restart backend
+    docker compose restart worker
+    ```
+  </Step>
+</Steps>
+
+### Redis Connection Issues
+
+```bash
+# Check Redis logs
+docker compose logs -f redis
+
+# Test Redis connection
+docker compose exec redis redis-cli ping
+# Expected output: PONG
+```
+
+### SSE Not Working
+
+<Steps>
+  <Step title="Verify Redis is running">
+    ```bash
+    docker compose logs -f redis
+    ```
+  </Step>
+  
+  <Step title="Check SSE configuration">
+    Ensure these variables are set:
+    ```bash
+    SSE_SOURCE=redis
+    SSE_FALLBACK_DB_INTERVAL_SECONDS=10
+    SSE_HEARTBEAT_SECONDS=30
+    SSE_RETRY_MS=5000
+    ```
+  </Step>
+  
+  <Step title="Monitor backend SSE logs">
+    ```bash
+    docker compose logs -f backend | grep SSE
+    ```
+  </Step>
+  
+  <Step title="Test SSE endpoint">
+    ```bash
+    curl http://localhost:8000/api/v1/sse/audits/test-id/progress
+    ```
+  </Step>
+</Steps>
+
+### Database Connection Issues
+
+<Warning>
+  If using Supabase Pooler, ensure `DB_POOL_PRE_PING=false` is set to avoid connection issues.
+</Warning>
+
+```bash
+# Test database connectivity
+docker compose exec backend python -c "
+import os
+from sqlalchemy import create_engine
+engine = create_engine(os.getenv('DATABASE_URL'))
+with engine.connect() as conn:
+    print('Database connected successfully')
+"
+```
+
+### Frontend Build Failures
+
+```bash
+# Clear Next.js cache
+rm -rf frontend/.next
+rm -rf frontend/node_modules
+
+# Rebuild frontend
+docker compose up --build frontend
+```
+
+### Worker Not Processing Tasks
+
+```bash
+# Check worker logs
+docker compose logs -f worker
+
+# Verify Celery is connected to Redis
+docker compose exec worker celery -A app.workers.tasks inspect ping
+
+# Check active tasks
+docker compose exec worker celery -A app.workers.tasks inspect active
+```
+
+## Docker Commands Reference
+
+### Starting Services
+
+```bash
+# Standard mode (detached)
+docker compose up --build -d
+
+# Development mode (foreground)
+docker compose -f docker-compose.dev.yml up --build
+
+# Start specific service
+docker compose up backend
+```
+
+### Stopping Services
+
+```bash
+# Stop all services
+docker compose down
+
+# Stop and remove volumes
+docker compose down -v
+
+# Stop specific service
+docker compose stop backend
+```
+
+### Viewing Logs
+
+```bash
+# Follow all logs
+docker compose logs -f
+
+# Follow specific service
+docker compose logs -f backend
+
+# Last 100 lines
+docker compose logs --tail=100 backend
+```
+
+### Executing Commands
+
+```bash
+# Run backend shell
+docker compose exec backend bash
+
+# Run database migrations
+docker compose exec backend alembic upgrade head
+
+# Run tests
+docker compose exec backend pytest
+```
+
+### Rebuilding
+
+```bash
+# Rebuild all images
+docker compose build --no-cache
+
+# Rebuild specific service
+docker compose build --no-cache backend
+```
+
+## Production Considerations
+
+<Warning>
+  Do not use the development compose file in production. It includes volume mounts and debug settings that are insecure for production use.
+</Warning>
+
+### Security
+
+- Generate secure secrets using `python -c "import secrets; print(secrets.token_urlsafe(32))"`
+- Never commit `.env` files to version control
+- Use environment-specific `.env` files (`.env.production`, `.env.staging`)
+- Rotate secrets regularly (every 90 days)
+
+### Performance
+
+- Set appropriate worker concurrency based on CPU cores
+- Configure database pool sizes based on connection limits
+- Use Redis for SSE primary source (better performance than DB fallback)
+- Monitor container resource usage with `docker stats`
+
+### Monitoring
+
+```bash
+# View resource usage
+docker stats
+
+# Check container health
+docker compose ps
+
+# Export logs
+docker compose logs > logs.txt
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="AWS Deployment" icon="aws" href="/deployment/aws">
+    Deploy to AWS ECS with RDS and ElastiCache
+  </Card>
+  <Card title="Supabase Migration" icon="database" href="/deployment/supabase-migration">
+    Migrate between Supabase regions
+  </Card>
+</CardGroup>

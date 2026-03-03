@@ -1,0 +1,248 @@
+---
+title: Server-Sent Events (SSE)
+description: Real-time audit progress updates via SSE
+---
+
+## Overview
+
+Server-Sent Events (SSE) provide real-time progress updates for running audits. SSE replaces polling and reduces server load while improving responsiveness.
+
+<Note>
+  SSE requires standard JWT Bearer authentication via the Authorization header.
+</Note>
+
+---
+
+## Stream Audit Progress
+
+**GET** `/api/v1/sse/audits/{audit_id}/progress`
+
+Establishes an SSE connection for real-time audit progress updates.
+
+<RequestExample>
+```javascript JavaScript
+const eventSource = new EventSource(
+  'https://api.latentgeo.com/api/v1/sse/audits/123/progress',
+  {
+    headers: {
+      'Authorization': 'Bearer YOUR_TOKEN'
+    }
+  }
+);
+
+eventSource.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  console.log('Progress:', data.progress + '%');
+  console.log('Status:', data.status);
+  
+  if (data.status === 'completed' || data.status === 'failed') {
+    eventSource.close();
+  }
+};
+
+eventSource.onerror = (error) => {
+  console.error('SSE error:', error);
+  eventSource.close();
+};
+```
+</RequestExample>
+
+<ResponseExample>
+```
+event: message
+data: {"audit_id": 123, "status": "running", "progress": 25, "message": "Analyzing pages..."}
+
+event: message
+data: {"audit_id": 123, "status": "running", "progress": 50, "message": "Running competitor analysis..."}
+
+event: message  
+data: {"audit_id": 123, "status": "running", "progress": 75, "message": "Generating report..."}
+
+event: message
+data: {"audit_id": 123, "status": "completed", "progress": 100, "geo_score": 78.5}
+```
+</ResponseExample>
+
+---
+
+## Event Data Structure
+
+Each SSE message contains a JSON payload with the following fields:
+
+<ResponseField name="audit_id" type="integer">
+  Audit ID
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Current status: `pending`, `running`, `completed`, `failed`
+</ResponseField>
+
+<ResponseField name="progress" type="integer">
+  Progress percentage (0-100)
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Human-readable progress message
+</ResponseField>
+
+<ResponseField name="geo_score" type="number">
+  GEO score (present when available)
+</ResponseField>
+
+<ResponseField name="total_pages" type="integer">
+  Number of pages analyzed (when available)
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message (only present on failure)
+</ResponseField>
+
+---
+
+## Stream Behavior
+
+### Initial Event
+
+The stream immediately sends the current audit state upon connection.
+
+### Progress Updates
+
+Progress updates are sent in real-time:
+- **Redis mode** (production): Updates pushed via Redis pub/sub
+- **Database mode** (fallback): Polls database every 10 seconds
+- **Heartbeat**: Sent every 30 seconds if no updates
+
+### Terminal Events
+
+The stream automatically closes when the audit reaches a terminal state:
+- `completed`: Audit finished successfully
+- `failed`: Audit failed with an error
+
+### Timeouts
+
+- **Max duration**: 3600 seconds (1 hour)
+- **Reconnect retry**: 5000ms (client should retry with this interval)
+
+---
+
+## Configuration
+
+SSE behavior is controlled by environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SSE_SOURCE` | `redis` | Data source (`redis` or `db`) |
+| `SSE_MAX_DURATION` | `3600` | Max stream duration (seconds) |
+| `SSE_HEARTBEAT_SECONDS` | `30` | Heartbeat interval (seconds) |
+| `SSE_FALLBACK_DB_INTERVAL_SECONDS` | `10` | DB polling interval (seconds) |
+| `SSE_RETRY_MS` | `5000` | Client retry interval (milliseconds) |
+
+---
+
+## Error Handling
+
+### Stream Timeout
+
+```json
+{
+  "error": "Stream timeout"
+}
+```
+
+Sent when the stream reaches max duration. Client should reconnect or switch to polling.
+
+### Internal Error
+
+```json
+{
+  "error": "Internal server error"
+}
+```
+
+Sent on unexpected errors. Client should implement exponential backoff.
+
+---
+
+## Best Practices
+
+<Tip>
+  **Always close the EventSource** when you receive a terminal status (completed/failed) to free up server resources.
+</Tip>
+
+### Connection Management
+
+1. **Automatic reconnection**: Browsers automatically reconnect on disconnect
+2. **Manual close**: Call `eventSource.close()` on terminal events
+3. **Error handling**: Implement exponential backoff on repeated errors
+
+### Fallback Strategy
+
+If SSE is not supported or fails:
+
+1. Detect SSE support: Check `typeof EventSource !== 'undefined'`
+2. Fallback to polling: Use `GET /api/v1/audits/{audit_id}/status`
+3. Poll interval: 5-10 seconds for running audits
+
+---
+
+## Example: React Hook
+
+```typescript
+import { useEffect, useState } from 'react';
+
+interface AuditProgress {
+  audit_id: number;
+  status: string;
+  progress: number;
+  message?: string;
+  geo_score?: number;
+}
+
+export function useAuditProgress(auditId: number, token: string) {
+  const [progress, setProgress] = useState<AuditProgress | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const eventSource = new EventSource(
+      `https://api.latentgeo.com/api/v1/sse/audits/${auditId}/progress`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    eventSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      setProgress(data);
+      
+      if (data.status === 'completed' || data.status === 'failed') {
+        eventSource.close();
+      }
+    };
+
+    eventSource.onerror = (err) => {
+      setError('Connection error');
+      eventSource.close();
+    };
+
+    return () => {
+      eventSource.close();
+    };
+  }, [auditId, token]);
+
+  return { progress, error };
+}
+```
+
+---
+
+## Error Codes
+
+<ResponseField name="401" type="error">
+  Missing or invalid authentication token
+</ResponseField>
+
+<ResponseField name="403" type="error">
+  Cross-user access denied
+</ResponseField>
+
+<ResponseField name="404" type="error">
+  Audit not found
+</ResponseField>

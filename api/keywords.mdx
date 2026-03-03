@@ -1,0 +1,176 @@
+---
+title: "Keywords API"
+description: "Research and retrieve keyword data for SEO optimization"
+---
+
+## Research Keywords
+
+<RequestExample>
+```bash POST /keywords/research/{audit_id}
+curl -X POST "https://api.latentgeo.com/keywords/research/123?domain=example.com" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "seed_keywords": ["seo tools", "audit software", "website analysis"]
+  }'
+```
+</RequestExample>
+
+Research keywords for a given audit and domain using AI-powered analysis.
+
+### Path Parameters
+
+<ParamField path="audit_id" type="integer" required>
+  The ID of the audit to research keywords for
+</ParamField>
+
+### Query Parameters
+
+<ParamField query="domain" type="string" required>
+  Domain to research keywords for
+</ParamField>
+
+### Request Body
+
+<ParamField body="seed_keywords" type="array" optional>
+  Array of seed keywords to expand and research. If not provided, the system will generate keywords based on domain analysis.
+</ParamField>
+
+### Response
+
+Returns an array of keyword objects with search volume, difficulty, and intent data.
+
+<ResponseField name="id" type="integer">
+  Unique identifier for the keyword record
+</ResponseField>
+
+<ResponseField name="audit_id" type="integer">
+  The audit ID this keyword belongs to
+</ResponseField>
+
+<ResponseField name="term" type="string">
+  The keyword or search term
+</ResponseField>
+
+<ResponseField name="volume" type="integer">
+  Monthly search volume estimate
+</ResponseField>
+
+<ResponseField name="difficulty" type="integer">
+  Keyword difficulty score (0-100, higher is more competitive)
+</ResponseField>
+
+<ResponseField name="cpc" type="number">
+  Cost per click in USD for paid advertising
+</ResponseField>
+
+<ResponseField name="intent" type="string" optional>
+  Search intent classification (e.g., "informational", "commercial", "transactional", "navigational")
+</ResponseField>
+
+<ResponseField name="created_at" type="string">
+  Timestamp when the keyword was researched (ISO 8601 format)
+</ResponseField>
+
+<ResponseExample>
+```json Response
+[
+  {
+    "id": 1,
+    "audit_id": 123,
+    "term": "seo audit tool",
+    "volume": 5400,
+    "difficulty": 68,
+    "cpc": 12.50,
+    "intent": "commercial",
+    "created_at": "2026-03-03T10:30:00Z"
+  },
+  {
+    "id": 2,
+    "audit_id": 123,
+    "term": "website seo analysis",
+    "volume": 8100,
+    "difficulty": 55,
+    "cpc": 9.75,
+    "intent": "informational",
+    "created_at": "2026-03-03T10:30:00Z"
+  }
+]
+```
+</ResponseExample>
+
+### Error Codes
+
+<ResponseField name="401" type="error">
+  Unauthorized - Invalid or missing authentication token
+</ResponseField>
+
+<ResponseField name="403" type="error">
+  Forbidden - User does not have access to this audit
+</ResponseField>
+
+<ResponseField name="404" type="error">
+  Not Found - Audit ID does not exist
+</ResponseField>
+
+<ResponseField name="502" type="error">
+  Bad Gateway - Kimi AI generation failed. Error code: `KIMI_GENERATION_FAILED`
+</ResponseField>
+
+<ResponseField name="503" type="error">
+  Service Unavailable - Kimi provider not configured. Error code: `KIMI_UNAVAILABLE`. Ensure `NV_API_KEY_ANALYSIS`, `NVIDIA_API_KEY`, or `NV_API_KEY` is set.
+</ResponseField>
+
+---
+
+## Get Keywords
+
+<RequestExample>
+```bash GET /keywords/{audit_id}
+curl -X GET "https://api.latentgeo.com/keywords/123" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+</RequestExample>
+
+Retrieve stored keywords for an audit.
+
+### Path Parameters
+
+<ParamField path="audit_id" type="integer" required>
+  The ID of the audit to retrieve keywords for
+</ParamField>
+
+### Response
+
+Returns an array of keyword objects with the same structure as the research endpoint.
+
+<ResponseExample>
+```json Response
+[
+  {
+    "id": 1,
+    "audit_id": 123,
+    "term": "seo audit tool",
+    "volume": 5400,
+    "difficulty": 68,
+    "cpc": 12.50,
+    "intent": "commercial",
+    "created_at": "2026-03-03T10:30:00Z"
+  }
+]
+```
+</ResponseExample>
+
+### Error Codes
+
+<ResponseField name="401" type="error">
+  Unauthorized - Invalid or missing authentication token
+</ResponseField>
+
+<ResponseField name="403" type="error">
+  Forbidden - User does not have access to this audit
+</ResponseField>
+
+<ResponseField name="404" type="error">
+  Not Found - Audit ID does not exist
+</ResponseField>

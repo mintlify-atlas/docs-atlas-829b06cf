@@ -1,0 +1,305 @@
+---
+title: "Audits"
+description: "Create comprehensive SEO and GEO audits to analyze website performance, technical issues, and optimization opportunities"
+---
+
+## Overview
+
+The audit system is the foundation of LatentGEO, providing comprehensive analysis of websites for SEO and Generative Engine Optimization (GEO). Audits analyze technical structure, content quality, E-E-A-T signals, schema markup, and competitor positioning.
+
+## Audit Creation Workflow
+
+### Starting an Audit
+
+1. **Submit URL**: Provide the target website URL to analyze
+2. **Configure Settings**: Specify language, market, and competitor domains
+3. **Automated Analysis**: The platform automatically:
+   - Crawls the website structure
+   - Analyzes content and metadata
+   - Evaluates schema markup
+   - Compares against competitors
+   - Generates actionable recommendations
+
+<Note>
+PageSpeed analysis is **not** run automatically during audit creation to keep the initial audit fast. You can trigger it on-demand from the dashboard or when generating the PDF report.
+</Note>
+
+### Audit Statuses
+
+Audits progress through several states:
+
+- **Pending**: Audit created, waiting for configuration
+- **Running**: Analysis in progress
+- **Completed**: All analysis finished, results available
+- **Failed**: Error occurred during processing
+
+## Audit Types
+
+### Technical SEO Audit
+
+Analyzes fundamental SEO elements:
+- HTML structure and heading hierarchy
+- Meta tags and descriptions
+- Schema.org markup
+- Internal linking structure
+- Mobile-friendliness
+- Crawlability issues
+
+### GEO (Generative Engine Optimization) Audit
+
+Evaluates optimization for AI-powered search engines:
+- Content structure for AI comprehension
+- Citation-ready content blocks
+- Authority signals and references
+- FAQ schema implementation
+- E-E-A-T (Experience, Expertise, Authoritativeness, Trust)
+
+### PageSpeed Analysis
+
+Measures Core Web Vitals and performance metrics:
+- **LCP** (Largest Contentful Paint)
+- **INP** (Interaction to Next Paint)
+- **CLS** (Cumulative Layout Shift)
+- Mobile and desktop strategies
+- Optimization opportunities
+- Diagnostics and best practices
+
+<Info>
+PageSpeed data is collected when you click "Run PageSpeed" or generate a PDF report. The analysis includes complete metrics, opportunities, and diagnostics for both mobile and desktop.
+</Info>
+
+### Competitor Analysis
+
+Compares your site against competitors:
+- GEO scores and rankings
+- Content gap analysis
+- Schema markup comparison
+- Backlink profiles
+- Citation visibility in LLMs
+
+## Audit Summary Data
+
+Each completed audit provides:
+
+```json
+{
+  "id": 123,
+  "url": "https://example.com",
+  "status": "completed",
+  "progress": 100,
+  "domain": "example.com",
+  "geo_score": 7.5,
+  "total_pages": 45,
+  "issues": {
+    "critical": 3,
+    "high": 8,
+    "medium": 15,
+    "low": 22
+  },
+  "scores": {
+    "h1_score": 8.2,
+    "structure_score": 7.5,
+    "content_score": 6.8,
+    "eeat_score": 7.0,
+    "schema_score": 5.5,
+    "overall_score": 7.0
+  }
+}
+```
+
+## Pages Analysis
+
+Each audited page receives detailed scoring:
+
+- **H1 Score**: Heading structure quality
+- **Structure Score**: HTML semantic markup
+- **Content Score**: Content quality and relevance
+- **E-E-A-T Score**: Authority and trust signals
+- **Schema Score**: Structured data implementation
+- **Overall Score**: Composite quality metric
+
+Issues are categorized by severity:
+- **Critical**: Major problems requiring immediate attention
+- **High**: Important issues affecting performance
+- **Medium**: Optimization opportunities
+- **Low**: Minor improvements
+
+## Fix Plan
+
+Every audit generates an actionable fix plan:
+
+```json
+[
+  {
+    "page_path": "/products/widget",
+    "issue_code": "MISSING_H1",
+    "priority": "CRITICAL",
+    "description": "Page missing H1 heading",
+    "suggestion": "Add a descriptive H1 that includes primary keyword"
+  },
+  {
+    "page_path": "/blog/article",
+    "issue_code": "NO_AUTHOR_INFO",
+    "priority": "HIGH",
+    "description": "Author information not found",
+    "suggestion": "Add author bio with credentials to improve E-E-A-T"
+  }
+]
+```
+
+## PDF Report Generation
+
+### Comprehensive Context
+
+The PDF report includes data from **all platform features**:
+
+✓ Technical SEO findings  
+✓ PageSpeed metrics (mobile + desktop)  
+✓ Competitor analysis  
+✓ Keyword rankings  
+✓ Backlink profile  
+✓ LLM visibility tracking  
+✓ AI content recommendations  
+
+### Automatic PageSpeed Trigger
+
+When you generate a PDF, the system automatically:
+1. Checks if PageSpeed data exists and is fresh (&lt;24 hours)
+2. Runs PageSpeed analysis if needed or forced
+3. Includes complete mobile and desktop metrics
+4. Generates comprehensive report with all context
+
+<Warning>
+PDF generation requires a distributed lock (Redis). If Redis is unavailable in production, PDF generation will be blocked to prevent concurrent generation issues.
+</Warning>
+
+### Force Refresh Options
+
+```bash
+POST /api/v1/audits/{audit_id}/generate-pdf
+{
+  "force_pagespeed_refresh": true,    // Re-run PageSpeed analysis
+  "force_report_refresh": true,        // Regenerate report markdown
+  "force_external_intel_refresh": true // Refresh competitor intelligence
+}
+```
+
+## Downloading Reports
+
+Reports are stored in Supabase storage and accessed via signed URLs:
+
+```bash
+# Get download URL (JSON response)
+GET /api/v1/audits/{audit_id}/download-pdf-url
+
+# Direct download (redirect to signed URL)
+GET /api/v1/audits/{audit_id}/download-pdf
+```
+
+Signed URLs expire after 1 hour for security.
+
+## API Endpoints
+
+### Create Audit
+```bash
+POST /api/v1/audits/
+{
+  "url": "https://example.com",
+  "language": "en",
+  "market": "US",
+  "competitors": ["competitor1.com", "competitor2.com"]
+}
+```
+
+### Get Audit Status
+```bash
+GET /api/v1/audits/{audit_id}/status
+```
+
+Returns lightweight status for polling:
+- Audit ID and URL
+- Current status and progress percentage
+- GEO score
+- Total pages analyzed
+
+### Get Full Audit Details
+```bash
+GET /api/v1/audits/{audit_id}
+```
+
+Returns complete audit data including:
+- All scores and metrics
+- Fix plan
+- Page-level analysis
+- Target audit data
+
+### List All Audits
+```bash
+GET /api/v1/audits/?skip=0&limit=100
+```
+
+### Get Pages
+```bash
+GET /api/v1/audits/{audit_id}/pages
+```
+
+### Get Competitors
+```bash
+GET /api/v1/audits/{audit_id}/competitors?limit=5
+```
+
+### Run PageSpeed Analysis
+```bash
+POST /api/v1/audits/{audit_id}/run-pagespeed
+{
+  "strategy": "both"  // "mobile", "desktop", or "both"
+}
+```
+
+Returns complete PageSpeed Insights data including:
+- Performance scores
+- Core Web Vitals metrics
+- Opportunities for optimization
+- Diagnostics
+- Accessibility, SEO, and best practices audits
+
+<Info>
+The PageSpeed endpoint returns the **full** PageSpeed data structure, not a summary. Use this for detailed performance analysis in your UI.
+</Info>
+
+## Best Practices
+
+### Performance Optimization
+- PageSpeed runs on-demand to keep audits fast
+- Use SSE for real-time progress updates instead of polling
+- Limit competitor analysis to 5-10 domains
+- Cache PDF reports for 24 hours
+
+### Error Handling
+- Monitor audit status for failures
+- Check `error_message` field for debugging
+- Implement retry logic for transient failures
+- Fall back to polling if SSE unavailable
+
+### Security
+- All endpoints require authentication
+- Users can only access their own audits
+- PDF URLs expire after 1 hour
+- Sensitive data never exposed in logs
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Real-time Monitoring" icon="signal-stream" href="/features/real-time-monitoring">
+    Track audit progress with Server-Sent Events
+  </Card>
+  <Card title="GEO Optimization" icon="sparkles" href="/features/geo-optimization">
+    Optimize for AI-powered search engines
+  </Card>
+  <Card title="Analytics" icon="chart-line" href="/features/analytics">
+    View insights and performance metrics
+  </Card>
+  <Card title="AI Content Generation" icon="wand-magic-sparkles" href="/features/ai-content-generation">
+    Generate optimized content suggestions
+  </Card>
+</CardGroup>

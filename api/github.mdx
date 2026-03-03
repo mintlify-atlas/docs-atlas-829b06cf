@@ -1,0 +1,396 @@
+---
+title: GitHub Integration
+description: Connect repositories and create SEO/GEO fix PRs
+---
+
+## OAuth Flow
+
+### Get Authorization URL
+
+**GET** `/api/v1/github/auth-url`
+
+Returns GitHub OAuth authorization URL and signed state token.
+
+<ResponseField name="url" type="string">
+  GitHub OAuth URL
+</ResponseField>
+
+<ResponseField name="state" type="string">
+  Signed state token (expires in 10 minutes)
+</ResponseField>
+
+---
+
+### OAuth Callback
+
+**POST** `/api/v1/github/callback`
+
+Handles OAuth callback and creates/updates connection.
+
+<ParamField body="code" type="string" required>
+  OAuth authorization code
+</ParamField>
+
+<ParamField body="state" type="string" required>
+  Signed state token
+</ParamField>
+
+<ResponseField name="status" type="string">
+  Connection status
+</ResponseField>
+
+<ResponseField name="connection_id" type="string">
+  GitHub connection ID
+</ResponseField>
+
+<ResponseField name="username" type="string">
+  GitHub username
+</ResponseField>
+
+---
+
+## Connections
+
+### List Connections
+
+**GET** `/api/v1/github/connections`
+
+Returns your active GitHub connections.
+
+<ResponseField name="connections" type="array">
+  Array of connection objects
+</ResponseField>
+
+---
+
+### Sync Repositories
+
+**POST** `/api/v1/github/sync/{connection_id}`
+
+Synchronizes repositories for a connection.
+
+<ResponseField name="status" type="string">
+  Sync status
+</ResponseField>
+
+<ResponseField name="synced_count" type="integer">
+  Number of repositories synced
+</ResponseField>
+
+---
+
+## Repositories
+
+### List Repositories
+
+**GET** `/api/v1/github/repositories/{connection_id}`
+
+Returns repositories for a connection.
+
+<ResponseField name="repositories" type="array">
+  Array of repository objects
+</ResponseField>
+
+---
+
+### Analyze Repository
+
+**POST** `/api/v1/github/analyze/{connection_id}/{repo_id}`
+
+Analyzes a repository to detect site type and build configuration.
+
+<ResponseField name="id" type="string">
+  Repository ID
+</ResponseField>
+
+<ResponseField name="full_name" type="string">
+  Repository full name (owner/repo)
+</ResponseField>
+
+<ResponseField name="site_type" type="string">
+  Detected site type (nextjs, docusaurus, mintlify, etc.)
+</ResponseField>
+
+<ResponseField name="build_command" type="string">
+  Detected build command
+</ResponseField>
+
+<ResponseField name="output_dir" type="string">
+  Detected output directory
+</ResponseField>
+
+---
+
+## Pull Requests
+
+### Create Pull Request
+
+**POST** `/api/v1/github/create-pr`
+
+Creates a pull request with SEO/GEO fixes.
+
+<ParamField body="connection_id" type="string" required>
+  GitHub connection ID
+</ParamField>
+
+<ParamField body="repo_id" type="string" required>
+  Repository ID
+</ParamField>
+
+<ParamField body="audit_id" type="integer" required>
+  Audit ID
+</ParamField>
+
+<ParamField body="fixes" type="array" required>
+  Array of fix objects
+</ParamField>
+
+<ResponseField name="id" type="string">
+  Pull request ID
+</ResponseField>
+
+<ResponseField name="pr_number" type="integer">
+  GitHub PR number
+</ResponseField>
+
+<ResponseField name="title" type="string">
+  PR title
+</ResponseField>
+
+<ResponseField name="html_url" type="string">
+  GitHub PR URL
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  PR status
+</ResponseField>
+
+---
+
+### List Pull Requests
+
+**GET** `/api/v1/github/prs/{repo_id}`
+
+Returns pull requests for a repository.
+
+<ResponseField name="prs" type="array">
+  Array of PR objects
+</ResponseField>
+
+---
+
+## Blog Auditing
+
+### Audit Repository Blogs
+
+**POST** `/api/v1/github/audit-blogs/{connection_id}/{repo_id}`
+
+Audits all blog posts in a repository.
+
+<ResponseField name="total_blogs" type="integer">
+  Total blogs found
+</ResponseField>
+
+<ResponseField name="blogs_audited" type="integer">
+  Blogs successfully audited
+</ResponseField>
+
+<ResponseField name="results" type="array">
+  Audit results for each blog
+</ResponseField>
+
+---
+
+### Create Blog Fixes PR
+
+**POST** `/api/v1/github/create-blog-fixes-pr/{connection_id}/{repo_id}`
+
+Creates a PR with fixes for specific blog posts.
+
+<ParamField body="blog_paths" type="array" required>
+  Array of blog file paths to fix
+</ParamField>
+
+<ResponseField name="status" type="string">
+  Operation status
+</ResponseField>
+
+<ResponseField name="pr" type="object">
+  Created PR object
+</ResponseField>
+
+<ResponseField name="fixes_applied" type="integer">
+  Number of fixes applied
+</ResponseField>
+
+<ResponseField name="blogs_fixed" type="integer">
+  Number of blogs fixed
+</ResponseField>
+
+---
+
+## GEO Blog Auditing
+
+### Audit Blogs with GEO
+
+**POST** `/api/v1/github/audit-blogs-geo/{connection_id}/{repo_id}`
+
+Audits blogs for both SEO and GEO optimization.
+
+<ResponseField name="total_blogs" type="integer">
+  Total blogs analyzed
+</ResponseField>
+
+<ResponseField name="geo_scores" type="array">
+  GEO scores for each blog
+</ResponseField>
+
+---
+
+### Create GEO Fixes PR
+
+**POST** `/api/v1/github/create-geo-fixes-pr/{connection_id}/{repo_id}`
+
+Creates a PR with SEO and GEO fixes.
+
+<ParamField body="blog_paths" type="array" required>
+  Blog paths to fix
+</ParamField>
+
+<ParamField body="include_geo" type="boolean" default="true">
+  Include GEO optimizations
+</ParamField>
+
+<ResponseField name="seo_fixes" type="integer">
+  Number of SEO fixes
+</ResponseField>
+
+<ResponseField name="geo_fixes" type="integer">
+  Number of GEO fixes
+</ResponseField>
+
+---
+
+## Auto-Fix PR
+
+### Create Auto-Fix PR from Audit
+
+**POST** `/api/v1/github/create-auto-fix-pr/{connection_id}/{repo_id}`
+
+Creates an automated PR based on an existing audit.
+
+<ParamField body="audit_id" type="integer" required>
+  Audit ID to use for fixes
+</ParamField>
+
+<ResponseField name="success" type="boolean">
+  Whether PR was created
+</ResponseField>
+
+<ResponseField name="pr_url" type="string">
+  GitHub PR URL
+</ResponseField>
+
+<ResponseField name="pr_number" type="integer">
+  PR number
+</ResponseField>
+
+---
+
+## Fix Inputs
+
+### Get Fix Inputs
+
+**GET** `/api/v1/github/fix-inputs/{audit_id}`
+
+Returns missing inputs required to safely apply fixes.
+
+<ResponseField name="audit_id" type="integer">
+  Audit ID
+</ResponseField>
+
+<ResponseField name="missing_inputs" type="array">
+  Array of missing input groups
+</ResponseField>
+
+<ResponseField name="missing_required" type="integer">
+  Count of required missing inputs
+</ResponseField>
+
+---
+
+### Submit Fix Inputs
+
+**POST** `/api/v1/github/fix-inputs/{audit_id}`
+
+Submits user-provided fix inputs.
+
+<ParamField body="inputs" type="array" required>
+  Array of input answers
+</ParamField>
+
+---
+
+### Fix Inputs Chat
+
+**POST** `/api/v1/github/fix-inputs/chat/{audit_id}`
+
+Get LLM-guided suggestions for missing fix inputs.
+
+<ParamField body="issue_code" type="string" required>
+  Issue code
+</ParamField>
+
+<ParamField body="field_key" type="string" required>
+  Field key
+</ParamField>
+
+<ParamField body="field_label" type="string">
+  Field label
+</ParamField>
+
+<ResponseField name="assistant_message" type="string">
+  AI assistant message
+</ResponseField>
+
+<ResponseField name="suggested_value" type="string">
+  Suggested value based on audit evidence
+</ResponseField>
+
+<ResponseField name="confidence" type="string">
+  Confidence level (evidence, unknown)
+</ResponseField>
+
+---
+
+## Webhooks
+
+### GitHub Webhook Handler
+
+**POST** `/api/v1/github/webhook`
+
+Receives GitHub webhook events (push, pull_request, installation).
+
+<Note>
+  This endpoint requires GitHub webhook signature verification.
+</Note>
+
+---
+
+## Error Codes
+
+<ResponseField name="400" type="error">
+  Invalid OAuth callback or missing parameters
+</ResponseField>
+
+<ResponseField name="401" type="error">
+  Invalid OAuth state or webhook signature
+</ResponseField>
+
+<ResponseField name="403" type="error">
+  Cross-user access denied
+</ResponseField>
+
+<ResponseField name="422" type="error">
+  Missing required fix inputs
+</ResponseField>

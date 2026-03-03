@@ -1,0 +1,449 @@
+---
+title: Contributing Guide
+description: Contribution workflow, code standards, and PR process for LatentGEO
+---
+
+## Getting Started
+
+<Steps>
+  <Step title="Fork and clone">
+    ```bash
+    # Fork the repository on GitHub
+    # Clone your fork
+    git clone https://github.com/YOUR_USERNAME/latentgeo.git
+    cd latentgeo
+    ```
+  </Step>
+
+  <Step title="Set up development environment">
+    Follow the [Local Setup guide](/development/local-setup) to get your environment running.
+  </Step>
+
+  <Step title="Create a feature branch">
+    ```bash
+    git checkout -b feature/your-feature-name
+    ```
+
+    Branch naming conventions:
+    - `feature/` - New features
+    - `fix/` - Bug fixes
+    - `refactor/` - Code refactoring
+    - `docs/` - Documentation updates
+    - `test/` - Test additions or fixes
+  </Step>
+</Steps>
+
+## Code Quality Standards
+
+### Backend (Python)
+
+#### Linting and Formatting
+
+Run before every commit:
+
+```bash
+# Auto-format code
+python -m black backend
+python -m isort backend
+
+# Lint
+python -m ruff check backend/app backend/tests
+
+# Type check
+python -m mypy backend/app --ignore-missing-imports
+```
+
+<Info>
+Consider setting up pre-commit hooks to automate these checks.
+</Info>
+
+#### Code Style
+
+- Follow PEP 8 conventions
+- Use type hints for function signatures
+- Maximum line length: 100 characters (Black default)
+- Use descriptive variable names
+
+**Example:**
+
+```python
+from typing import Optional
+from sqlalchemy.orm import Session
+from app.models import Audit
+
+class AuditService:
+    @staticmethod
+    def get_audit(db: Session, audit_id: int) -> Optional[Audit]:
+        """Retrieve audit by ID."""
+        return db.query(Audit).filter(Audit.id == audit_id).first()
+```
+
+#### Security Guidelines
+
+- **Never commit secrets** (.env files, API keys, credentials)
+- Use environment variables for configuration
+- Validate all user inputs
+- Always check ownership before allowing access to resources
+
+```python
+# Bad - No ownership check
+def delete_audit(db: Session, audit_id: int):
+    audit = db.query(Audit).filter(Audit.id == audit_id).first()
+    db.delete(audit)
+    
+# Good - Verify ownership
+def delete_audit(db: Session, audit_id: int, user_email: str):
+    audit = db.query(Audit).filter(
+        Audit.id == audit_id,
+        Audit.user_email == user_email
+    ).first()
+    if not audit:
+        raise HTTPException(status_code=404)
+    db.delete(audit)
+```
+
+### Frontend (TypeScript/React)
+
+#### Linting and Formatting
+
+```bash
+# Auto-format
+prettier --write frontend/
+
+# Lint
+pnpm --dir frontend lint
+
+# Type check
+pnpm --dir frontend run type-check
+```
+
+#### Code Style
+
+- Use functional components with hooks
+- Prefer TypeScript strict mode
+- Use `const` over `let` when possible
+- Destructure props in component signatures
+
+**Example:**
+
+```typescript
+import { Button } from '@/components/ui/button';
+
+interface AuditCardProps {
+  title: string;
+  status: 'pending' | 'running' | 'completed';
+  onView: () => void;
+}
+
+export function AuditCard({ title, status, onView }: AuditCardProps) {
+  return (
+    <div className="rounded-lg border p-4">
+      <h3 className="font-semibold">{title}</h3>
+      <p className="text-sm text-muted-foreground">{status}</p>
+      <Button onClick={onView}>View Details</Button>
+    </div>
+  );
+}
+```
+
+#### Component Organization
+
+```
+components/
+├── ui/              # Radix UI primitives (button, dialog, etc.)
+├── providers/       # Context providers
+├── [feature].tsx    # Feature-specific components
+```
+
+## Testing Requirements
+
+<Warning>
+All PRs must include tests for new functionality.
+</Warning>
+
+### Backend Tests
+
+```python
+import pytest
+from app.services.audit_service import AuditService
+from app.schemas import AuditCreate
+
+def test_create_audit(db_session):
+    """Test audit creation."""
+    audit_data = AuditCreate(
+        url="https://example.com",
+        user_email="test@example.com"
+    )
+    audit = AuditService.create_audit(db_session, audit_data)
+    
+    assert audit.id is not None
+    assert audit.url == "https://example.com"
+    assert audit.status == "pending"
+```
+
+### Frontend Tests
+
+```typescript
+import { describe, it, expect } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { AuditCard } from './AuditCard';
+
+describe('AuditCard', () => {
+  it('calls onView when button clicked', () => {
+    const onView = vi.fn();
+    render(
+      <AuditCard
+        title="Test Audit"
+        status="completed"
+        onView={onView}
+      />
+    );
+    
+    fireEvent.click(screen.getByText('View Details'));
+    expect(onView).toHaveBeenCalled();
+  });
+});
+```
+
+### Running Tests
+
+Run the full suite before submitting:
+
+```bash
+# Backend
+pytest -q backend/tests -m "not integration and not live"
+
+# Frontend
+pnpm --dir frontend test:ci
+
+# Security regression
+pytest -q backend/tests/test_security_remediation.py
+```
+
+## Git Workflow
+
+### Commit Messages
+
+Follow conventional commit format:
+
+```
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
+```
+
+**Types:**
+- `feat`: New feature
+- `fix`: Bug fix
+- `refactor`: Code refactoring
+- `test`: Test additions
+- `docs`: Documentation
+- `chore`: Build/tooling changes
+
+**Examples:**
+
+```bash
+feat(audit): add PageSpeed integration
+
+fix(auth): resolve token refresh race condition
+
+refactor(pipeline): extract LLM logic into service
+
+docs(setup): update Docker Compose instructions
+
+test(security): add ownership validation tests
+```
+
+<Check>
+**Good commit**: `feat(geo): add keyword gap analysis`
+
+**Bad commit**: `updated stuff`
+</Check>
+
+### Making Changes
+
+<Steps>
+  <Step title="Make your changes">
+    Follow code quality standards and test your changes locally.
+  </Step>
+
+  <Step title="Run quality checks">
+    ```bash
+    # Backend
+    python -m black backend
+    python -m ruff check backend/app backend/tests
+    pytest -q backend/tests -m "not integration and not live"
+    
+    # Frontend
+    pnpm --dir frontend lint
+    pnpm --dir frontend test:ci
+    pnpm --dir frontend build
+    ```
+  </Step>
+
+  <Step title="Commit changes">
+    ```bash
+    git add .
+    git commit -m "feat(scope): descriptive message"
+    ```
+  </Step>
+
+  <Step title="Push to your fork">
+    ```bash
+    git push origin feature/your-feature-name
+    ```
+  </Step>
+</Steps>
+
+## Pull Request Process
+
+### Creating a PR
+
+<Steps>
+  <Step title="Open pull request on GitHub">
+    Navigate to the main repository and create a PR from your fork.
+  </Step>
+
+  <Step title="Fill out PR template">
+    Provide:
+    - **Description**: What does this PR do?
+    - **Motivation**: Why is this change needed?
+    - **Testing**: How was it tested?
+    - **Screenshots**: For UI changes
+  </Step>
+
+  <Step title="Link related issues">
+    Reference issues using keywords:
+    ```markdown
+    Fixes #123
+    Closes #456
+    Related to #789
+    ```
+  </Step>
+</Steps>
+
+### PR Template
+
+```markdown
+## Description
+Brief description of changes.
+
+## Type of Change
+- [ ] Bug fix
+- [ ] New feature
+- [ ] Breaking change
+- [ ] Documentation update
+
+## Testing
+- [ ] Unit tests added/updated
+- [ ] Integration tests pass
+- [ ] Manual testing completed
+
+## Checklist
+- [ ] Code follows style guidelines
+- [ ] Self-review completed
+- [ ] Comments added for complex logic
+- [ ] Documentation updated
+- [ ] No new warnings generated
+```
+
+### Review Process
+
+1. **Automated checks**: CI pipeline runs linting, tests, and builds
+2. **Code review**: Maintainers review code quality and design
+3. **Testing**: Changes are tested in staging environment
+4. **Approval**: At least one maintainer approval required
+5. **Merge**: Squash and merge to main branch
+
+<Info>
+Maintainers may request changes or ask questions. Respond promptly and update your PR.
+</Info>
+
+## API Changes
+
+When modifying backend APIs:
+
+<Steps>
+  <Step title="Update schemas">
+    Modify Pydantic schemas in `backend/app/schemas/`
+  </Step>
+
+  <Step title="Update routes">
+    Modify FastAPI routes in `backend/app/api/routes/`
+  </Step>
+
+  <Step title="Regenerate frontend types">
+    ```bash
+    pnpm --dir frontend run api:generate-types
+    ```
+  </Step>
+
+  <Step title="Update frontend clients">
+    Modify API calls in `frontend/lib/api-client/`
+  </Step>
+
+  <Step title="Test contract">
+    ```bash
+    pytest backend/tests/test_api_contract.py
+    pnpm --dir frontend run type-check
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+API changes may require frontend updates. Coordinate with frontend maintainers.
+</Warning>
+
+## Documentation
+
+Update documentation for:
+
+- New features or APIs
+- Changed configuration options
+- New environment variables
+- Migration guides for breaking changes
+
+```bash
+# Add documentation in docs/
+touch docs/features/new-feature.mdx
+```
+
+## Getting Help
+
+<CardGroup cols={2}>
+  <Card title="GitHub Discussions" icon="comments">
+    Ask questions and discuss ideas
+  </Card>
+  <Card title="Discord Community" icon="discord">
+    Real-time chat with contributors
+  </Card>
+  <Card title="Issue Tracker" icon="bug">
+    Report bugs or request features
+  </Card>
+  <Card title="Documentation" icon="book">
+    Browse guides and API reference
+  </Card>
+</CardGroup>
+
+## Code of Conduct
+
+Be respectful, inclusive, and professional. We welcome contributions from everyone.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Local Setup" icon="laptop-code" href="/development/local-setup">
+    Set up your development environment
+  </Card>
+  <Card title="Testing Guide" icon="flask" href="/development/testing">
+    Learn how to test your changes
+  </Card>
+  <Card title="Backend Services" icon="server" href="/development/backend-services">
+    Understand the service architecture
+  </Card>
+  <Card title="Frontend Components" icon="react" href="/development/frontend-components">
+    Build with our component library
+  </Card>
+</CardGroup>

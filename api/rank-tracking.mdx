@@ -1,0 +1,202 @@
+---
+title: "Rank Tracking API"
+description: "Track keyword rankings and monitor search performance"
+---
+
+## Track Rankings
+
+<RequestExample>
+```bash POST /rank-tracking/track/{audit_id}
+curl -X POST "https://api.latentgeo.com/rank-tracking/track/123?domain=example.com" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "keywords": ["seo tools", "website audit", "seo analysis"]
+  }'
+```
+</RequestExample>
+
+Track search engine rankings for specified keywords.
+
+### Path Parameters
+
+<ParamField path="audit_id" type="integer" required>
+  The ID of the audit to track rankings for
+</ParamField>
+
+### Query Parameters
+
+<ParamField query="domain" type="string" required>
+  Domain to track rankings for
+</ParamField>
+
+### Request Body
+
+<ParamField body="keywords" type="array" required>
+  Array of keywords to track rankings for
+</ParamField>
+
+### Response
+
+Returns an array of ranking records with position data and competitor information.
+
+<ResponseField name="id" type="integer">
+  Unique identifier for the ranking record
+</ResponseField>
+
+<ResponseField name="audit_id" type="integer">
+  The audit ID this ranking belongs to
+</ResponseField>
+
+<ResponseField name="keyword" type="string">
+  The keyword being tracked
+</ResponseField>
+
+<ResponseField name="position" type="integer">
+  Current search engine ranking position (1-100+)
+</ResponseField>
+
+<ResponseField name="url" type="string">
+  The URL that is ranking for this keyword
+</ResponseField>
+
+<ResponseField name="device" type="string">
+  Device type used for tracking (e.g., "mobile", "desktop")
+</ResponseField>
+
+<ResponseField name="location" type="string">
+  Geographic location for the search (e.g., "United States", "Global")
+</ResponseField>
+
+<ResponseField name="top_results" type="array" optional>
+  Array of top 10 competitor results
+  <Expandable title="properties">
+    <ResponseField name="position" type="integer">
+      Ranking position of the competitor
+    </ResponseField>
+    <ResponseField name="url" type="string">
+      Competitor URL
+    </ResponseField>
+    <ResponseField name="title" type="string">
+      Page title
+    </ResponseField>
+    <ResponseField name="domain" type="string">
+      Competitor domain
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="tracked_at" type="string">
+  Timestamp when the ranking was checked (ISO 8601 format)
+</ResponseField>
+
+<ResponseExample>
+```json Response
+[
+  {
+    "id": 1,
+    "audit_id": 123,
+    "keyword": "seo tools",
+    "position": 8,
+    "url": "https://example.com/seo-tools",
+    "device": "desktop",
+    "location": "United States",
+    "top_results": [
+      {
+        "position": 1,
+        "url": "https://competitor1.com/tools",
+        "title": "Best SEO Tools 2026",
+        "domain": "competitor1.com"
+      },
+      {
+        "position": 2,
+        "url": "https://competitor2.com/seo",
+        "title": "Top SEO Tools",
+        "domain": "competitor2.com"
+      }
+    ],
+    "tracked_at": "2026-03-03T10:30:00Z"
+  },
+  {
+    "id": 2,
+    "audit_id": 123,
+    "keyword": "website audit",
+    "position": 3,
+    "url": "https://example.com/audit",
+    "device": "mobile",
+    "location": "United States",
+    "top_results": [],
+    "tracked_at": "2026-03-03T10:31:00Z"
+  }
+]
+```
+</ResponseExample>
+
+### Error Codes
+
+<ResponseField name="401" type="error">
+  Unauthorized - Invalid or missing authentication token
+</ResponseField>
+
+<ResponseField name="403" type="error">
+  Forbidden - User does not have access to this audit
+</ResponseField>
+
+<ResponseField name="404" type="error">
+  Not Found - Audit ID does not exist
+</ResponseField>
+
+---
+
+## Get Rankings
+
+<RequestExample>
+```bash GET /rank-tracking/{audit_id}
+curl -X GET "https://api.latentgeo.com/rank-tracking/123" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+</RequestExample>
+
+Retrieve stored ranking data for an audit.
+
+### Path Parameters
+
+<ParamField path="audit_id" type="integer" required>
+  The ID of the audit to retrieve rankings for
+</ParamField>
+
+### Response
+
+Returns an array of ranking objects with the same structure as the track endpoint.
+
+<ResponseExample>
+```json Response
+[
+  {
+    "id": 1,
+    "audit_id": 123,
+    "keyword": "seo tools",
+    "position": 8,
+    "url": "https://example.com/seo-tools",
+    "device": "desktop",
+    "location": "United States",
+    "top_results": [],
+    "tracked_at": "2026-03-03T10:30:00Z"
+  }
+]
+```
+</ResponseExample>
+
+### Error Codes
+
+<ResponseField name="401" type="error">
+  Unauthorized - Invalid or missing authentication token
+</ResponseField>
+
+<ResponseField name="403" type="error">
+  Forbidden - User does not have access to this audit
+</ResponseField>
+
+<ResponseField name="404" type="error">
+  Not Found - Audit ID does not exist
+</ResponseField>

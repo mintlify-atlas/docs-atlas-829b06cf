@@ -1,0 +1,248 @@
+---
+title: "PageSpeed API"
+description: "Analyze website performance and Core Web Vitals"
+---
+
+## Analyze PageSpeed
+
+<RequestExample>
+```bash GET /pagespeed/analyze
+curl -X GET "https://api.latentgeo.com/pagespeed/analyze?url=https://example.com&strategy=mobile" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+</RequestExample>
+
+Analyze page performance using Google PageSpeed Insights.
+
+### Query Parameters
+
+<ParamField query="url" type="string" required>
+  URL to analyze for performance metrics
+</ParamField>
+
+<ParamField query="strategy" type="string" default="mobile">
+  Analysis strategy: `mobile` or `desktop`
+</ParamField>
+
+### Response
+
+Returns detailed performance metrics including Core Web Vitals and optimization suggestions.
+
+<ResponseField name="lighthouseResult" type="object">
+  Complete Lighthouse audit results
+  <Expandable title="properties">
+    <ResponseField name="finalUrl" type="string">
+      The final URL analyzed (after redirects)
+    </ResponseField>
+    <ResponseField name="categories" type="object">
+      Performance category scores
+      <Expandable title="properties">
+        <ResponseField name="performance" type="object">
+          Performance score (0-100)
+        </ResponseField>
+        <ResponseField name="accessibility" type="object">
+          Accessibility score (0-100)
+        </ResponseField>
+        <ResponseField name="best-practices" type="object">
+          Best practices score (0-100)
+        </ResponseField>
+        <ResponseField name="seo" type="object">
+          SEO score (0-100)
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    <ResponseField name="audits" type="object">
+      Detailed audit results for each metric
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="loadingExperience" type="object">
+  Real-world loading experience data from Chrome User Experience Report
+  <Expandable title="properties">
+    <ResponseField name="metrics" type="object">
+      Core Web Vitals metrics
+      <Expandable title="properties">
+        <ResponseField name="FIRST_CONTENTFUL_PAINT_MS" type="object">
+          First Contentful Paint timing
+        </ResponseField>
+        <ResponseField name="LARGEST_CONTENTFUL_PAINT_MS" type="object">
+          Largest Contentful Paint timing
+        </ResponseField>
+        <ResponseField name="CUMULATIVE_LAYOUT_SHIFT_SCORE" type="object">
+          Cumulative Layout Shift score
+        </ResponseField>
+        <ResponseField name="INTERACTION_TO_NEXT_PAINT" type="object">
+          Interaction to Next Paint timing
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    <ResponseField name="overall_category" type="string">
+      Overall performance category: `FAST`, `AVERAGE`, or `SLOW`
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseExample>
+```json Response
+{
+  "lighthouseResult": {
+    "finalUrl": "https://example.com/",
+    "categories": {
+      "performance": {
+        "score": 0.92,
+        "title": "Performance"
+      },
+      "accessibility": {
+        "score": 0.88,
+        "title": "Accessibility"
+      },
+      "best-practices": {
+        "score": 0.95,
+        "title": "Best Practices"
+      },
+      "seo": {
+        "score": 1.0,
+        "title": "SEO"
+      }
+    },
+    "audits": {
+      "first-contentful-paint": {
+        "score": 0.98,
+        "displayValue": "0.8 s",
+        "numericValue": 800
+      },
+      "largest-contentful-paint": {
+        "score": 0.95,
+        "displayValue": "1.2 s",
+        "numericValue": 1200
+      },
+      "cumulative-layout-shift": {
+        "score": 1.0,
+        "displayValue": "0.02",
+        "numericValue": 0.02
+      }
+    }
+  },
+  "loadingExperience": {
+    "metrics": {
+      "LARGEST_CONTENTFUL_PAINT_MS": {
+        "percentile": 1450,
+        "category": "FAST"
+      },
+      "CUMULATIVE_LAYOUT_SHIFT_SCORE": {
+        "percentile": 0.05,
+        "category": "FAST"
+      },
+      "INTERACTION_TO_NEXT_PAINT": {
+        "percentile": 120,
+        "category": "FAST"
+      }
+    },
+    "overall_category": "FAST"
+  }
+}
+```
+</ResponseExample>
+
+### Error Codes
+
+<ResponseField name="401" type="error">
+  Unauthorized - Invalid or missing authentication token
+</ResponseField>
+
+<ResponseField name="400" type="error">
+  Bad Request - Invalid URL or strategy parameter
+</ResponseField>
+
+<ResponseField name="429" type="error">
+  Too Many Requests - PageSpeed API rate limit exceeded
+</ResponseField>
+
+<ResponseField name="502" type="error">
+  Bad Gateway - Google PageSpeed API error
+</ResponseField>
+
+---
+
+## Compare Strategies
+
+<RequestExample>
+```bash GET /pagespeed/compare
+curl -X GET "https://api.latentgeo.com/pagespeed/compare?url=https://example.com" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+</RequestExample>
+
+Compare page performance across mobile and desktop strategies.
+
+### Query Parameters
+
+<ParamField query="url" type="string" required>
+  URL to analyze for both mobile and desktop
+</ParamField>
+
+### Response
+
+Returns performance data for both mobile and desktop strategies.
+
+<ResponseField name="mobile" type="object">
+  Mobile performance analysis with the same structure as the analyze endpoint
+</ResponseField>
+
+<ResponseField name="desktop" type="object">
+  Desktop performance analysis with the same structure as the analyze endpoint
+</ResponseField>
+
+<ResponseExample>
+```json Response
+{
+  "mobile": {
+    "lighthouseResult": {
+      "finalUrl": "https://example.com/",
+      "categories": {
+        "performance": {
+          "score": 0.85,
+          "title": "Performance"
+        }
+      }
+    },
+    "loadingExperience": {
+      "overall_category": "AVERAGE"
+    }
+  },
+  "desktop": {
+    "lighthouseResult": {
+      "finalUrl": "https://example.com/",
+      "categories": {
+        "performance": {
+          "score": 0.98,
+          "title": "Performance"
+        }
+      }
+    },
+    "loadingExperience": {
+      "overall_category": "FAST"
+    }
+  }
+}
+```
+</ResponseExample>
+
+### Error Codes
+
+<ResponseField name="401" type="error">
+  Unauthorized - Invalid or missing authentication token
+</ResponseField>
+
+<ResponseField name="400" type="error">
+  Bad Request - Invalid URL parameter
+</ResponseField>
+
+<ResponseField name="429" type="error">
+  Too Many Requests - PageSpeed API rate limit exceeded
+</ResponseField>
+
+<ResponseField name="502" type="error">
+  Bad Gateway - Google PageSpeed API error
+</ResponseField>

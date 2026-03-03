@@ -1,0 +1,153 @@
+---
+title: API Overview
+description: Introduction to the LatentGEO API for SEO/GEO audits
+---
+
+## Base URLs
+
+LatentGEO provides two API base URL patterns:
+
+- **Legacy**: `http://localhost:8000/api`
+- **Versioned**: `http://localhost:8000/api/v1` (recommended)
+
+Both prefixes expose the same protected business routes. The versioned endpoint is recommended for all new integrations.
+
+## OpenAPI Documentation
+
+Interactive API documentation is available at:
+
+```
+http://localhost:8000/docs
+```
+
+This Swagger UI interface allows you to explore all endpoints, view request/response schemas, and test API calls directly from your browser.
+
+## Public vs Protected Endpoints
+
+### Public Endpoints
+
+The following endpoints do not require authentication:
+
+- `GET /health` - Overall system health status
+- `GET /health/ready` - Readiness probe
+- `GET /health/live` - Liveness probe
+- `POST /api/github/webhook` - GitHub webhook receiver (signature-validated)
+- `POST /api/v1/github/webhook` - GitHub webhook receiver (signature-validated)
+- `POST /api/webhooks/github/incoming` - GitHub incoming webhook (signature-validated if configured)
+- `POST /api/v1/webhooks/github/incoming` - GitHub incoming webhook (signature-validated if configured)
+- `POST /api/webhooks/hubspot/incoming` - HubSpot webhook receiver
+- `POST /api/v1/webhooks/hubspot/incoming` - HubSpot webhook receiver
+- `GET /api/webhooks/health` - Webhook health check
+- `GET /api/v1/webhooks/health` - Webhook health check
+
+### Protected Endpoints
+
+All other API endpoints require JWT bearer authentication. See the [Authentication](/api/authentication) page for details.
+
+## API Endpoint Categories
+
+### HubSpot Integration
+
+- OAuth authentication and connection management
+- Content synchronization
+- Page retrieval and analysis
+- Recommendation generation and application
+- Change rollback
+
+All available under `/api/v1/hubspot/*`
+
+### GitHub Integration
+
+- OAuth authentication and connection management
+- Repository listing and synchronization
+- Blog content auditing (SEO and GEO)
+- Automated fix PR creation
+- Pull request management
+- Fix input management with chat interface
+
+All available under `/api/v1/github/*`
+
+### Other Categories
+
+- **Audits** - SEO and GEO audit execution and management
+- **Reports** - Audit report generation and retrieval
+- **Analytics** - Usage and performance analytics
+- **Search** - Search console integration
+- **PageSpeed** - Performance metrics
+- **Backlinks** - Backlink analysis
+- **Keywords** - Keyword tracking and analysis
+- **Rank Tracking** - Search ranking monitoring
+- **LLM Visibility** - Generative engine optimization metrics
+- **AI Content** - AI-powered content generation
+- **Content Editor** - Content editing and optimization
+- **Content Analysis** - Content quality analysis
+- **GEO** - Generative engine optimization
+- **Webhooks** - Webhook management
+- **SSE** - Server-sent events for real-time updates
+
+## Quick Start Example
+
+Here's a simple example to get started with the GitHub OAuth flow:
+
+```bash
+curl -s http://localhost:8000/api/v1/github/auth-url \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+**Response:**
+
+```json
+{
+  "url": "https://github.com/login/oauth/authorize?...",
+  "state": "eyJhbGciOiJIUzI1NiIs..."
+}
+```
+
+The `url` should be used to redirect the user for OAuth authorization, and the `state` token must be included in the callback request for security validation.
+
+## Health Check
+
+The health endpoint returns service status information:
+
+```bash
+curl http://localhost:8000/health
+```
+
+**Response:**
+
+```json
+{
+  "status": "healthy",
+  "services": {
+    "database": "connected",
+    "redis": "connected"
+  }
+}
+```
+
+**Status Codes:**
+- `200` - System is healthy or degraded but operational
+- `503` - System is unhealthy
+
+Possible status values: `healthy`, `degraded`, `unhealthy`
+
+## Rate Limiting
+
+Rate limiting is enabled in production environments to prevent abuse. Requests exceeding the rate limit will receive a `429 Too Many Requests` response.
+
+## CORS Policy
+
+The API supports CORS for web applications. In development mode, the following origins are automatically allowed:
+
+- `http://localhost:3000`
+- `http://localhost:8000`
+- `http://127.0.0.1:3000`
+- `http://frontend:3000` (Docker)
+
+Production deployments should configure allowed origins via the `CORS_ORIGINS` environment variable.
+
+## Next Steps
+
+- Learn about [Authentication](/api/authentication) requirements
+- Review [Error Handling](/api/errors) conventions
+- Explore the [OpenAPI documentation](http://localhost:8000/docs) for detailed endpoint specifications

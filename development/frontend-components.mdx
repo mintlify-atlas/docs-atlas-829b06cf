@@ -1,0 +1,567 @@
+---
+title: Frontend Components & Architecture
+description: Component library, theming, API integration, and state management patterns
+---
+
+## Tech Stack
+
+- **Framework**: Next.js 16 (App Router)
+- **UI Library**: Radix UI primitives
+- **Styling**: Tailwind CSS v4 + CSS variables
+- **State Management**: TanStack Query (React Query)
+- **API Client**: openapi-fetch (type-safe)
+- **Forms**: React Hook Form + Zod validation
+- **Auth**: Auth0 Next.js SDK
+
+## Project Structure
+
+```
+frontend/
+├── app/                    # Next.js app router
+│   ├── (dashboard)/       # Protected routes
+│   ├── api/               # API routes (SSE proxy)
+│   └── layout.tsx         # Root layout
+├── components/
+│   ├── ui/                # Radix UI primitives
+│   ├── providers/         # Context providers
+│   └── [feature].tsx      # Feature components
+├── lib/
+│   ├── api-client/        # Generated API client
+│   └── utils.ts           # Utilities
+├── hooks/                 # Custom React hooks
+└── styles/
+    └── globals.css        # Global styles
+```
+
+## Component Library (Radix UI)
+
+LatentGEO uses [Radix UI](https://radix-ui.com) for accessible, unstyled primitives.
+
+### Button Component
+
+<CodeGroup>
+```tsx Import
+import { Button } from '@/components/ui/button';
+```
+
+```tsx Usage
+<Button>Click me</Button>
+<Button variant="destructive">Delete</Button>
+<Button variant="outline" size="sm">Cancel</Button>
+<Button variant="ghost" size="icon">
+  <TrashIcon />
+</Button>
+```
+
+```tsx Definition
+import { cva, type VariantProps } from 'class-variance-authority';
+import { Slot } from '@radix-ui/react-slot';
+
+const buttonVariants = cva(
+  "inline-flex items-center justify-center rounded-lg transition-colors",
+  {
+    variants: {
+      variant: {
+        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        destructive: "bg-destructive text-destructive-foreground",
+        outline: "border border-border bg-transparent hover:bg-accent",
+        ghost: "hover:bg-accent hover:text-foreground",
+      },
+      size: {
+        default: "h-10 px-5 py-2.5",
+        sm: "h-9 px-3.5",
+        lg: "h-11 px-7",
+        icon: "size-10",
+      },
+    },
+  }
+);
+```
+</CodeGroup>
+
+### Dialog Component
+
+```tsx
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+
+function DeleteAuditDialog() {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant="destructive">Delete</Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Are you sure?</DialogTitle>
+          <DialogDescription>
+            This action cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex gap-2">
+          <Button variant="outline">Cancel</Button>
+          <Button variant="destructive" onClick={handleDelete}>
+            Delete
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+```
+
+### Card Component
+
+```tsx
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+
+function AuditCard({ audit }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{audit.url}</CardTitle>
+        <CardDescription>
+          Status: {audit.status}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <p>Progress: {audit.progress}%</p>
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+### Available Components
+
+<CardGroup cols={3}>
+  <Card title="Button" icon="hand-pointer" />
+  <Card title="Dialog" icon="window-maximize" />
+  <Card title="Card" icon="id-card" />
+  <Card title="Tabs" icon="folder" />
+  <Card title="Select" icon="caret-down" />
+  <Card title="Input" icon="keyboard" />
+  <Card title="Label" icon="tag" />
+  <Card title="Checkbox" icon="check-square" />
+  <Card title="Badge" icon="certificate" />
+  <Card title="Table" icon="table" />
+  <Card title="Sheet" icon="sidebar" />
+  <Card title="Textarea" icon="align-left" />
+</CardGroup>
+
+<Info>
+All components are in `components/ui/` and built on Radix UI primitives.
+</Info>
+
+## Theming and Styling
+
+### Tailwind CSS v4
+
+LatentGEO uses Tailwind CSS with CSS variables for theming.
+
+**Global Styles** (`styles/globals.css`):
+
+```css
+@import "tailwindcss";
+
+:root {
+  --background: 0 0% 100%;
+  --foreground: 240 10% 3.9%;
+  --primary: 240 5.9% 10%;
+  --primary-foreground: 0 0% 98%;
+  --border: 240 5.9% 90%;
+  --ring: 240 5.9% 10%;
+}
+
+.dark {
+  --background: 240 10% 3.9%;
+  --foreground: 0 0% 98%;
+  --primary: 0 0% 98%;
+  --primary-foreground: 240 5.9% 10%;
+  --border: 240 3.7% 15.9%;
+  --ring: 240 4.9% 83.9%;
+}
+```
+
+### Theme Toggle
+
+```tsx
+import { useTheme } from 'next-themes';
+import { Button } from '@/components/ui/button';
+import { MoonIcon, SunIcon } from 'lucide-react';
+
+export function ThemeToggle() {
+  const { theme, setTheme } = useTheme();
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+    >
+      <SunIcon className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+      <MoonIcon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+    </Button>
+  );
+}
+```
+
+### Theme Provider
+
+```tsx
+import { ThemeProvider } from 'next-themes';
+
+export default function RootLayout({ children }) {
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <body>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          {children}
+        </ThemeProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+### Utility Function
+
+```typescript
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+
+// Usage
+<div className={cn("base-class", isActive && "active-class")} />
+```
+
+## API Client Integration
+
+### Type-Safe API Client
+
+Generated from OpenAPI schema:
+
+```typescript
+import createClient from 'openapi-fetch';
+import type { paths } from './schema';
+
+const apiClient = createClient<paths>({
+  baseUrl: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000',
+});
+
+export { apiClient };
+```
+
+### Making API Calls
+
+<CodeGroup>
+```typescript GET Request
+import { apiClient } from '@/lib/api-client';
+
+const { data, error } = await apiClient.GET('/api/v1/audits/{audit_id}', {
+  params: {
+    path: { audit_id: 123 },
+  },
+});
+
+if (error) {
+  console.error('Failed to fetch audit:', error);
+  return;
+}
+
+console.log('Audit:', data);
+```
+
+```typescript POST Request
+const { data, error } = await apiClient.POST('/api/v1/audits/', {
+  body: {
+    url: 'https://example.com',
+    competitors: ['competitor1.com'],
+  },
+});
+```
+
+```typescript DELETE Request
+const { error } = await apiClient.DELETE('/api/v1/audits/{audit_id}', {
+  params: {
+    path: { audit_id: 123 },
+  },
+});
+```
+</CodeGroup>
+
+### Auth Token Injection
+
+```typescript
+import { getAccessToken } from '@auth0/nextjs-auth0';
+
+const accessToken = await getAccessToken();
+
+const { data } = await apiClient.GET('/api/v1/audits/', {
+  headers: {
+    Authorization: `Bearer ${accessToken}`,
+  },
+});
+```
+
+## State Management (TanStack Query)
+
+### Query Provider
+
+```tsx
+'use client';
+
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { useState } from 'react';
+
+export function QueryProvider({ children }: { children: React.ReactNode }) {
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            staleTime: 60 * 1000, // 1 minute
+            refetchOnWindowFocus: false,
+          },
+        },
+      })
+  );
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      {children}
+      <ReactQueryDevtools initialIsOpen={false} />
+    </QueryClientProvider>
+  );
+}
+```
+
+### Using Queries
+
+```tsx
+import { useQuery } from '@tanstack/react-query';
+import { apiClient } from '@/lib/api-client';
+
+function AuditList() {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['audits'],
+    queryFn: async () => {
+      const { data, error } = await apiClient.GET('/api/v1/audits/');
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  if (isLoading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error.message}</div>;
+
+  return (
+    <div>
+      {data?.map((audit) => (
+        <AuditCard key={audit.id} audit={audit} />
+      ))}
+    </div>
+  );
+}
+```
+
+### Using Mutations
+
+```tsx
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiClient } from '@/lib/api-client';
+
+function CreateAuditButton() {
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: async (url: string) => {
+      const { data, error } = await apiClient.POST('/api/v1/audits/', {
+        body: { url },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      // Invalidate and refetch audits list
+      queryClient.invalidateQueries({ queryKey: ['audits'] });
+    },
+  });
+
+  return (
+    <Button
+      onClick={() => mutation.mutate('https://example.com')}
+      disabled={mutation.isPending}
+    >
+      {mutation.isPending ? 'Creating...' : 'Create Audit'}
+    </Button>
+  );
+}
+```
+
+## Form Handling
+
+### React Hook Form + Zod
+
+```tsx
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+
+const auditSchema = z.object({
+  url: z.string().url('Must be a valid URL'),
+  competitors: z.array(z.string()).optional(),
+});
+
+type AuditFormData = z.infer<typeof auditSchema>;
+
+function CreateAuditForm() {
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<AuditFormData>({
+    resolver: zodResolver(auditSchema),
+  });
+
+  const onSubmit = (data: AuditFormData) => {
+    console.log('Form data:', data);
+  };
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <div>
+        <Label htmlFor="url">Website URL</Label>
+        <Input
+          id="url"
+          {...register('url')}
+          placeholder="https://example.com"
+        />
+        {errors.url && (
+          <p className="text-sm text-destructive">{errors.url.message}</p>
+        )}
+      </div>
+      <Button type="submit">Create Audit</Button>
+    </form>
+  );
+}
+```
+
+## Real-Time Updates (SSE)
+
+### SSE Hook
+
+```typescript
+import { useEffect, useState } from 'react';
+
+export function useAuditSSE(auditId: number) {
+  const [progress, setProgress] = useState(0);
+  const [status, setStatus] = useState<string>('pending');
+
+  useEffect(() => {
+    const eventSource = new EventSource(
+      `/api/sse/audits/${auditId}/progress`
+    );
+
+    eventSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      setProgress(data.progress);
+      setStatus(data.status);
+    };
+
+    eventSource.onerror = () => {
+      eventSource.close();
+    };
+
+    return () => eventSource.close();
+  }, [auditId]);
+
+  return { progress, status };
+}
+```
+
+### Using SSE Hook
+
+```tsx
+import { useAuditSSE } from '@/hooks/useAuditSSE';
+import { Progress } from '@/components/ui/progress';
+
+function AuditProgress({ auditId }: { auditId: number }) {
+  const { progress, status } = useAuditSSE(auditId);
+
+  return (
+    <div>
+      <p>Status: {status}</p>
+      <Progress value={progress} />
+      <p>{progress}% complete</p>
+    </div>
+  );
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Server Components by default">
+    Next.js App Router defaults to Server Components. Only use `'use client'` when needed (hooks, state, events).
+  </Accordion>
+
+  <Accordion title="Colocate components">
+    Keep components close to where they're used. Only extract to `components/` when reused.
+  </Accordion>
+
+  <Accordion title="Type everything">
+    Use TypeScript for all components. Let the API client generate types from OpenAPI.
+  </Accordion>
+
+  <Accordion title="Optimize images">
+    Use Next.js `<Image>` component with proper `width`, `height`, and `alt` attributes.
+  </Accordion>
+
+  <Accordion title="Lazy load heavy components">
+    Use dynamic imports for charts and heavy libraries:
+    
+    ```tsx
+    const Chart = dynamic(() => import('@/components/Chart'), {
+      ssr: false,
+      loading: () => <Skeleton />,
+    });
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Backend Services" icon="server" href="/development/backend-services">
+    Learn the APIs these components consume
+  </Card>
+  <Card title="Testing" icon="flask" href="/development/testing">
+    Test your components with Vitest
+  </Card>
+  <Card title="Contributing" icon="code-branch" href="/development/contributing">
+    Contribute UI components
+  </Card>
+  <Card title="Local Setup" icon="laptop-code" href="/development/local-setup">
+    Set up your development environment
+  </Card>
+</CardGroup>

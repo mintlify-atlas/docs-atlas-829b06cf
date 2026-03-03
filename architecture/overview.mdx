@@ -1,0 +1,207 @@
+---
+title: 'Architecture Overview'
+description: 'Full-stack architecture of the LatentGEO platform'
+icon: 'diagram-project'
+---
+
+## System Architecture
+
+LatentGEO is a production-ready, full-stack SaaS platform for SEO/GEO audits built with modern technologies and best practices.
+
+### Technology Stack
+
+<CardGroup cols={3}>
+  <Card title="Backend" icon="server">
+    FastAPI + SQLAlchemy + Celery
+  </Card>
+  <Card title="Frontend" icon="browser">
+    Next.js 16 (App Router)
+  </Card>
+  <Card title="Real-time" icon="bolt">
+    Server-Sent Events (SSE)
+  </Card>
+</CardGroup>
+
+### Infrastructure Components
+
+| Component | Technology | Purpose |
+|-----------|-----------|----------|
+| **Database** | Supabase Postgres | Primary data store with pooling |
+| **Cache & Queue** | Redis | Real-time events, caching, Celery broker |
+| **Storage** | Supabase Storage | File uploads and artifacts |
+| **Task Queue** | Celery | Background job processing |
+| **Monitoring** | Sentry | Error tracking and performance |
+
+## System Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        CLIENT LAYER                          │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │          Next.js Frontend (Port 3000)                │   │
+│  │  • React 19 + App Router                             │   │
+│  │  • TanStack Query (data fetching)                    │   │
+│  │  • Radix UI + Tailwind CSS                           │   │
+│  │  • SSE Client (useAuditSSE hook)                     │   │
+│  └──────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+                            ↕ HTTP/SSE
+┌─────────────────────────────────────────────────────────────┐
+│                       API LAYER                              │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │        FastAPI Backend (Port 8000)                   │   │
+│  │  • API Versioning (/api/v1)                          │   │
+│  │  • CORS & Auth Middleware                            │   │
+│  │  • Rate Limiting (Redis-backed)                      │   │
+│  │  • SSE Endpoints                                     │   │
+│  │  • OpenAPI Documentation                             │   │
+│  └──────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+                            ↕
+┌─────────────────────────────────────────────────────────────┐
+│                    SERVICE LAYER                             │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
+│  │   Audit      │  │    AI/LLM    │  │   Content    │      │
+│  │   Service    │  │   Service    │  │   Service    │      │
+│  └──────────────┘  └──────────────┘  └──────────────┘      │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
+│  │   SEO/GEO    │  │  Analytics   │  │  Backlinks   │      │
+│  │   Services   │  │   Service    │  │   Service    │      │
+│  └──────────────┘  └──────────────┘  └──────────────┘      │
+└─────────────────────────────────────────────────────────────┘
+                            ↕
+┌─────────────────────────────────────────────────────────────┐
+│                     DATA LAYER                               │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
+│  │   Supabase   │  │    Redis     │  │   Supabase   │      │
+│  │   Postgres   │  │   (Cache +   │  │   Storage    │      │
+│  │              │  │    Queue)    │  │   (Files)    │      │
+│  └──────────────┘  └──────────────┘  └──────────────┘      │
+└─────────────────────────────────────────────────────────────┘
+                            ↕
+┌─────────────────────────────────────────────────────────────┐
+│                   WORKER LAYER                               │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │              Celery Workers                          │   │
+│  │  • Audit processing                                  │   │
+│  │  • SEO analysis                                      │   │
+│  │  • AI content generation                            │   │
+│  │  • Report generation (PDF)                          │   │
+│  └──────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Deployment Modes
+
+LatentGEO supports two canonical Docker deployment modes:
+
+### 1. Standard Mode (`docker-compose.yml`)
+
+**Production-ready configuration:**
+
+```bash
+docker compose up --build -d
+```
+
+**Characteristics:**
+- Backend/worker containers without code mounts
+- Frontend in production mode (optimized build)
+- Server-side API URL: `http://backend:8000`
+- Client-side API URL: `http://localhost:8000`
+- Suitable for staging and production environments
+
+### 2. Development Mode (`docker-compose.dev.yml`)
+
+**Hot-reload development configuration:**
+
+```bash
+docker compose -f docker-compose.dev.yml up --build
+```
+
+**Characteristics:**
+- Hot reload for both backend and frontend
+- Code mounted as volumes for instant updates
+- Debug mode enabled
+- Ideal for local development
+
+## Key Environment Variables
+
+### Backend Configuration
+
+```bash
+# SSE Real-time Configuration
+SSE_SOURCE=redis                      # redis|db
+SSE_FALLBACK_DB_INTERVAL_SECONDS=10   # Fallback polling interval
+SSE_HEARTBEAT_SECONDS=30              # Keep-alive heartbeat
+SSE_RETRY_MS=5000                     # Client retry interval
+
+# Database Configuration
+DB_POOL_PRE_PING=false                # Recommended for Supabase pooler
+```
+
+### Frontend Configuration
+
+```bash
+# Server-side (internal Docker network)
+API_URL=http://backend:8000
+
+# Client-side (browser)
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
+```
+
+## Service URLs
+
+When running locally:
+
+| Service | URL | Purpose |
+|---------|-----|----------|
+| **Frontend** | `http://localhost:3000` | User interface |
+| **Backend API** | `http://localhost:8000` | REST API |
+| **API Docs** | `http://localhost:8000/docs` | Swagger UI |
+| **ReDoc** | `http://localhost:8000/redoc` | Alternative API docs |
+| **OpenAPI JSON** | `http://localhost:8000/openapi.json` | OpenAPI schema |
+
+## Real-time Communication
+
+### SSE vs Webhooks
+
+LatentGEO uses both SSE and webhooks for different purposes:
+
+- **SSE (Server-Sent Events)**: Real-time progress updates for the UI dashboard
+- **Webhooks**: External integrations (GitHub, HubSpot, etc.)
+
+These are complementary, not exclusive:
+- SSE solves real-time UX for audit progress
+- Webhooks solve external automation and integrations
+
+## Security Features
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="shield-halved">
+    Auth0 integration with JWT bearer tokens
+  </Card>
+  <Card title="Rate Limiting" icon="gauge-high">
+    Redis-backed distributed rate limiting
+  </Card>
+  <Card title="CORS" icon="globe">
+    Configurable CORS with credential support
+  </Card>
+  <Card title="Security Headers" icon="lock">
+    CSP, HSTS, X-Frame-Options, etc.
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="Backend Details" icon="server" href="/architecture/backend">
+    Explore the FastAPI backend architecture
+  </Card>
+  <Card title="Frontend Details" icon="browser" href="/architecture/frontend">
+    Explore the Next.js frontend architecture
+  </Card>
+  <Card title="Real-time System" icon="bolt" href="/architecture/real-time">
+    Deep dive into SSE implementation
+  </Card>
+</CardGroup>

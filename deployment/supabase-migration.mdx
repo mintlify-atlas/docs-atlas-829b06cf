@@ -1,0 +1,565 @@
+---
+title: 'Supabase Region Migration'
+description: 'Migrate your LatentGEO database and storage between Supabase regions with zero data loss'
+---
+
+## Overview
+
+This runbook guides you through migrating your LatentGEO deployment from one Supabase region to another. Common scenarios include:
+
+- Reducing latency by moving closer to users
+- Compliance requirements (data residency)
+- Disaster recovery preparation
+- Cost optimization
+
+<Warning>
+  This migration requires a **maintenance window** with write operations frozen. Plan for 2-4 hours of downtime depending on database size.
+</Warning>
+
+## Prerequisites
+
+<Steps>
+  <Step title="Create Target Project">
+    Create a new Supabase project in the target region:
+    
+    - Log in to Supabase Dashboard
+    - Click "New Project"
+    - Select target region (e.g., `us-east-1`, `eu-west-1`, `ap-southeast-1`)
+    - Configure project settings
+    - Note the project URL and API keys
+  </Step>
+  
+  <Step title="Verify Access">
+    Confirm you have:
+    
+    ```bash
+    # Source project credentials
+    SOURCE_DB_URL=postgresql://postgres:[password]@db.[project-ref].supabase.co:5432/postgres
+    SOURCE_SUPABASE_URL=https://[project-ref].supabase.co
+    SOURCE_SUPABASE_KEY=[anon-key]
+    SOURCE_SERVICE_ROLE_KEY=[service-role-key]
+    
+    # Target project credentials
+    TARGET_DB_URL=postgresql://postgres:[password]@db.[new-project-ref].supabase.co:5432/postgres
+    TARGET_SUPABASE_URL=https://[new-project-ref].supabase.co
+    TARGET_SUPABASE_KEY=[anon-key]
+    TARGET_SERVICE_ROLE_KEY=[service-role-key]
+    ```
+  </Step>
+  
+  <Step title="Install Tools">
+    ```bash
+    # PostgreSQL client tools
+    sudo apt-get install postgresql-client
+    
+    # Verify installation
+    pg_dump --version
+    pg_restore --version
+    ```
+  </Step>
+  
+  <Step title="Schedule Maintenance Window">
+    - Notify all users of the maintenance window
+    - Set up a maintenance page
+    - Disable background jobs and scheduled tasks
+    - Stop all write operations to the database
+  </Step>
+</Steps>
+
+## Migration Process
+
+### Phase 1: Database Backup
+
+<Steps>
+  <Step title="Create Database Dump">
+    Create a full backup of the source database:
+    
+    ```bash
+    pg_dump --format=custom \
+      --no-owner \
+      --no-privileges \
+      --verbose \
+      "$SOURCE_DB_URL" \
+      > supabase_$(date +%Y%m%d_%H%M%S).dump
+    ```
+    
+    <Note>
+      The `--no-owner` and `--no-privileges` flags ensure compatibility with the target database's ownership structure.
+    </Note>
+  </Step>
+  
+  <Step title="Verify Backup">
+    Check the backup file was created successfully:
+    
+    ```bash
+    # Check file size
+    ls -lh supabase_*.dump
+    
+    # List contents
+    pg_restore --list supabase_*.dump | head -20
+    ```
+  </Step>
+  
+  <Step title="Create Safety Copy">
+    ```bash
+    # Copy to safe location
+    cp supabase_*.dump /backup/location/
+    
+    # Optionally compress
+    gzip -k supabase_*.dump
+    ```
+  </Step>
+</Steps>
+
+### Phase 2: Database Restore
+
+<Warning>
+  The target database should be empty before restore. The `--clean` flag will drop existing objects.
+</Warning>
+
+<Steps>
+  <Step title="Restore to Target Database">
+    ```bash
+    pg_restore --clean \
+      --if-exists \
+      --no-owner \
+      --no-privileges \
+      --verbose \
+      --dbname="$TARGET_DB_URL" \
+      supabase_*.dump
+    ```
+    
+    <Note>
+      Some errors about missing roles or extensions are normal. Supabase manages these automatically.
+    </Note>
+  </Step>
+  
+  <Step title="Verify Table Counts">
+    Run this query on both source and target databases:
+    
+    ```sql
+    SELECT 'audits' AS table_name, count(*) FROM audits
+    UNION ALL
+    SELECT 'reports', count(*) FROM reports
+    UNION ALL
+    SELECT 'audited_pages', count(*) FROM audited_pages
+    UNION ALL
+    SELECT 'competitors', count(*) FROM competitors
+    UNION ALL
+    SELECT 'geo_articles', count(*) FROM geo_articles
+    UNION ALL
+    SELECT 'geo_article_sections', count(*) FROM geo_article_sections
+    UNION ALL
+    SELECT 'users', count(*) FROM users
+    ORDER BY table_name;
+    ```
+    
+    Verify counts match exactly between source and target.
+  </Step>
+  
+  <Step title="Verify Critical Data">
+    ```sql
+    -- Check latest audit
+    SELECT id, created_at, status, url FROM audits ORDER BY created_at DESC LIMIT 1;
+    
+    -- Check user count
+    SELECT COUNT(*) as user_count FROM users;
+    
+    -- Check report count
+    SELECT COUNT(*) as report_count FROM reports WHERE status = 'completed';
+    ```
+  </Step>
+</Steps>
+
+### Phase 3: Storage Migration
+
+<Steps>
+  <Step title="Create Target Bucket">
+    In the Supabase Dashboard for the target project:
+    
+    - Navigate to Storage
+    - Create bucket named `audit-reports`
+    - Set appropriate policies (public read or private)
+  </Step>
+  
+  <Step title="List Source Objects">
+    ```bash
+    # Install Supabase CLI
+    npm install -g supabase
+    
+    # Login
+    supabase login
+    
+    # Link to source project
+    supabase link --project-ref [source-project-ref]
+    
+    # List objects
+    supabase storage ls audit-reports
+    ```
+  </Step>
+  
+  <Step title="Copy Storage Objects">
+    Use the Supabase Storage API to copy objects:
+    
+    ```python
+    from supabase import create_client
+    import os
+    
+    # Source client
+    source_supabase = create_client(
+        os.getenv('SOURCE_SUPABASE_URL'),
+        os.getenv('SOURCE_SERVICE_ROLE_KEY')
+    )
+    
+    # Target client
+    target_supabase = create_client(
+        os.getenv('TARGET_SUPABASE_URL'),
+        os.getenv('TARGET_SERVICE_ROLE_KEY')
+    )
+    
+    # List all files
+    files = source_supabase.storage.from_('audit-reports').list()
+    
+    for file in files:
+        # Download from source
+        data = source_supabase.storage.from_('audit-reports').download(file['name'])
+        
+        # Upload to target
+        target_supabase.storage.from_('audit-reports').upload(
+            file['name'],
+            data,
+            {'content-type': file.get('metadata', {}).get('mimetype', 'application/octet-stream')}
+        )
+        
+        print(f"Copied: {file['name']}")
+    ```
+  </Step>
+  
+  <Step title="Verify Storage Migration">
+    ```bash
+    # Count files in source
+    SOURCE_COUNT=$(supabase storage ls audit-reports --project-ref [source] | wc -l)
+    
+    # Count files in target
+    TARGET_COUNT=$(supabase storage ls audit-reports --project-ref [target] | wc -l)
+    
+    echo "Source files: $SOURCE_COUNT"
+    echo "Target files: $TARGET_COUNT"
+    ```
+    
+    Verify counts match and spot-check a few files by downloading them.
+  </Step>
+</Steps>
+
+### Phase 4: Configuration Update
+
+<Steps>
+  <Step title="Update Environment Variables">
+    Update these variables in your deployment environment (Docker Compose, AWS ECS, etc.):
+    
+    ```bash
+    # Database
+    DATABASE_URL=postgresql://postgres:[new-password]@db.[new-ref].supabase.co:5432/postgres
+    
+    # Supabase
+    SUPABASE_URL=https://[new-ref].supabase.co
+    SUPABASE_KEY=[new-anon-key]
+    SUPABASE_SERVICE_ROLE_KEY=[new-service-role-key]
+    SUPABASE_JWT_SECRET=[new-jwt-secret]
+    SUPABASE_STORAGE_BUCKET=audit-reports
+    ```
+  </Step>
+  
+  <Step title="Update CI/CD Secrets">
+    If using GitHub Actions or similar:
+    
+    - Update repository secrets
+    - Update environment variables in CI/CD platform
+    - Update AWS Secrets Manager (if applicable)
+  </Step>
+  
+  <Step title="Update docker-compose.yml">
+    For Docker deployments, update your `.env` file:
+    
+    ```bash
+    # Backup current .env
+    cp .env .env.backup.$(date +%Y%m%d_%H%M%S)
+    
+    # Update with new credentials
+    sed -i 's/old-project-ref/new-project-ref/g' .env
+    sed -i 's/old-anon-key/new-anon-key/g' .env
+    ```
+  </Step>
+</Steps>
+
+### Phase 5: Cutover
+
+<Warning>
+  This is the critical phase. Have your rollback plan ready before proceeding.
+</Warning>
+
+<Steps>
+  <Step title="Deploy to Staging First">
+    If you have a staging environment:
+    
+    ```bash
+    # Docker Compose staging
+    docker compose -f docker-compose.yml down
+    docker compose -f docker-compose.yml up -d
+    
+    # Verify services
+    docker compose ps
+    curl http://localhost:8000/health
+    ```
+  </Step>
+  
+  <Step title="Validate Critical Paths">
+    Test these key functions:
+    
+    - User authentication
+    - Create new audit
+    - View existing reports
+    - SSE real-time updates
+    - Storage access (PDF downloads)
+    - Webhook delivery
+  </Step>
+  
+  <Step title="Deploy to Production">
+    ```bash
+    # Docker Compose
+    docker compose down
+    docker compose up -d
+    
+    # AWS ECS (if applicable)
+    aws ecs update-service \
+      --cluster auditor-cluster \
+      --service auditor-service \
+      --force-new-deployment
+    ```
+  </Step>
+  
+  <Step title="Monitor for 24 Hours">
+    Watch these metrics closely:
+    
+    - Database connection latency
+    - Error rates in logs
+    - SSE reconnection events
+    - API response times
+    - Storage access success rate
+    
+    ```bash
+    # Monitor logs
+    docker compose logs -f backend | grep -E "ERROR|WARNING"
+    
+    # Check database latency
+    docker compose exec backend python -c "
+    import time
+    from app.db.session import SessionLocal
+    db = SessionLocal()
+    start = time.time()
+    db.execute('SELECT 1')
+    print(f'Query latency: {(time.time() - start) * 1000:.2f}ms')
+    "
+    ```
+  </Step>
+</Steps>
+
+## Verification Checklist
+
+<Steps>
+  <Step title="Database Verification">
+    - [ ] All table row counts match
+    - [ ] Latest data is present (check created_at timestamps)
+    - [ ] Foreign key relationships intact
+    - [ ] Indexes exist (`\di` in psql)
+    - [ ] No missing sequences
+  </Step>
+  
+  <Step title="Storage Verification">
+    - [ ] File count matches
+    - [ ] Sample files download correctly
+    - [ ] File sizes match
+    - [ ] MIME types preserved
+    - [ ] Storage policies configured
+  </Step>
+  
+  <Step title="Application Verification">
+    - [ ] Health endpoint returns 200
+    - [ ] User login works
+    - [ ] Create new audit completes
+    - [ ] SSE events stream correctly
+    - [ ] Reports generate successfully
+    - [ ] PDF downloads work
+    - [ ] Webhooks deliver
+    - [ ] Background jobs process
+  </Step>
+  
+  <Step title="Performance Verification">
+    - [ ] Database query latency acceptable
+    - [ ] API response times normal
+    - [ ] No connection pool exhaustion
+    - [ ] Redis cache hit rate stable
+  </Step>
+</Steps>
+
+## Rollback Procedure
+
+<Warning>
+  Execute rollback immediately if you encounter critical issues during the first 24 hours.
+</Warning>
+
+<Steps>
+  <Step title="Identify Issue">
+    Common rollback triggers:
+    - Database connection failures
+    - Data inconsistencies
+    - High error rates (>5%)
+    - Storage access failures
+    - Unacceptable latency increase
+  </Step>
+  
+  <Step title="Restore Previous Configuration">
+    ```bash
+    # Restore .env from backup
+    cp .env.backup.YYYYMMDD_HHMMSS .env
+    
+    # Redeploy
+    docker compose down
+    docker compose up -d
+    ```
+  </Step>
+  
+  <Step title="Verify Rollback">
+    ```bash
+    # Check health
+    curl http://localhost:8000/health
+    
+    # Verify database connection
+    docker compose exec backend python -c "
+    from app.db.session import SessionLocal
+    db = SessionLocal()
+    result = db.execute('SELECT count(*) FROM audits').scalar()
+    print(f'Audit count: {result}')
+    "
+    ```
+  </Step>
+  
+  <Step title="Document Divergence">
+    If any data was written to the target database during the failed migration:
+    
+    - Export new records: `SELECT * FROM audits WHERE created_at > 'CUTOVER_TIME'`
+    - Document for manual reconciliation
+    - Plan re-migration with lessons learned
+  </Step>
+</Steps>
+
+## Post-Migration Tasks
+
+<Steps>
+  <Step title="Monitor Costs">
+    - Compare billing between old and new projects
+    - Verify no unexpected charges
+    - Adjust database compute if needed
+  </Step>
+  
+  <Step title="Update Documentation">
+    - Update connection strings in team docs
+    - Update runbooks with new project refs
+    - Document lessons learned
+  </Step>
+  
+  <Step title="Decommission Old Project">
+    After 30 days of stable operation:
+    
+    - Create final backup of old project
+    - Download all storage objects
+    - Pause old project (to stop billing)
+    - Schedule deletion after 90 days
+  </Step>
+</Steps>
+
+## Supported Compose Files
+
+This migration procedure works with both Docker Compose configurations:
+
+- `docker-compose.yml` - Standard production mode
+- `docker-compose.dev.yml` - Development mode with hot reload
+
+Both files use the same Supabase environment variables, so the migration process is identical.
+
+## Troubleshooting
+
+### Migration Errors
+
+<AccordionGroup>
+  <Accordion title="pg_restore: error: role 'postgres' does not exist">
+    This is normal when using `--no-owner`. Supabase manages roles automatically. The restore will continue.
+  </Accordion>
+  
+  <Accordion title="pg_restore: error: extension 'uuid-ossp' already exists">
+    This is normal. Supabase pre-installs common extensions. Use `--if-exists` flag to suppress these errors.
+  </Accordion>
+  
+  <Accordion title="Connection timeout during large restore">
+    For databases >5GB:
+    
+    ```bash
+    # Increase statement timeout
+    export PGOPTIONS="-c statement_timeout=0"
+    pg_restore --dbname="$TARGET_DB_URL" supabase.dump
+    ```
+  </Accordion>
+  
+  <Accordion title="Storage upload fails with 'Bucket not found'">
+    Verify bucket exists in target project:
+    
+    ```bash
+    supabase storage ls --project-ref [target-ref]
+    ```
+    
+    Create if missing via Dashboard or CLI.
+  </Accordion>
+</AccordionGroup>
+
+### Performance Issues
+
+<AccordionGroup>
+  <Accordion title="High database latency after migration">
+    Check the region distance:
+    
+    ```bash
+    # Measure latency
+    time psql "$TARGET_DB_URL" -c "SELECT 1"
+    ```
+    
+    If latency is >100ms, verify:
+    - Application and database are in same region
+    - No network issues between regions
+    - Database is properly sized
+  </Accordion>
+  
+  <Accordion title="SSE reconnection storms">
+    If you see excessive SSE reconnections:
+    
+    ```bash
+    # Check Redis connectivity
+    docker compose exec backend redis-cli -u "$REDIS_URL" PING
+    
+    # Verify SSE configuration
+    docker compose exec backend env | grep SSE
+    ```
+    
+    Ensure `SSE_SOURCE=redis` and Redis is accessible.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Docker Deployment" icon="docker" href="/deployment/docker">
+    Configure Docker Compose with new Supabase credentials
+  </Card>
+  <Card title="AWS Deployment" icon="aws" href="/deployment/aws">
+    Update ECS task definitions with migrated database
+  </Card>
+</CardGroup>

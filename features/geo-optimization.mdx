@@ -1,0 +1,434 @@
+---
+title: "GEO Optimization"
+description: "Optimize your content for Generative Engine Optimization (GEO) to increase visibility in AI-powered search engines like ChatGPT, Gemini, and Perplexity"
+---
+
+## What is GEO?
+
+**Generative Engine Optimization (GEO)** is the practice of optimizing content to be discovered, understood, and cited by Large Language Models (LLMs) and AI-powered search engines.
+
+Unlike traditional SEO that focuses on search engine rankings, GEO optimizes for:
+- **Citation likelihood** in AI responses
+- **Content structure** for machine comprehension
+- **Authority signals** that LLMs recognize
+- **Schema markup** that provides context
+- **Answer-ready content** that LLMs can quote
+
+## Key GEO Features
+
+### Citation Tracking
+
+Monitor how often your brand is mentioned in LLM responses:
+
+- Track mentions across ChatGPT, Gemini, Perplexity, and other LLMs
+- Analyze sentiment of citations (positive, neutral, negative)
+- Monitor citation rate over time
+- Identify queries where you're cited
+- Track position in LLM responses
+
+<Info>
+Citation tracking runs in the background and builds a historical record of your brand's visibility in AI-generated content.
+</Info>
+
+### Competitor Citation Analysis
+
+Understand how your citations compare to competitors:
+
+```json
+{
+  "your_citations": 12,
+  "your_citation_rate": 40.0,
+  "competitors": [
+    {
+      "name": "Competitor A",
+      "citations": 18,
+      "citation_rate": 60.0,
+      "top_queries": [
+        "best marketing automation tools",
+        "email marketing software comparison"
+      ],
+      "strengths": [
+        "Higher appearance in AI answer sets",
+        "Broader query coverage"
+      ]
+    }
+  ],
+  "gaps": [
+    "Competitor A appears 6 more times across sampled queries"
+  ],
+  "opportunities": [
+    "Create citation-ready comparison pages by category",
+    "Add trusted external references to claims",
+    "Ship FAQ + schema bundles on high-intent pages"
+  ]
+}
+```
+
+### Query Discovery
+
+Discover high-potential queries where you could gain citations:
+
+- Generate relevant queries for your niche
+- Score queries by citation potential
+- Identify intent (informational, commercial, navigational)
+- Estimate search volume and competition
+- Get actionable recommendations
+
+**Example Query Opportunities:**
+
+| Query | Intent | Potential Score | Recommendation |
+|-------|--------|-----------------|----------------|
+| "best [category] alternatives" | Commercial | 85 | Create comparison page with proof blocks |
+| "[brand] vs marketplace options" | Commercial | 78 | Add external source citations |
+| "how to choose [product]" | Informational | 72 | Add FAQ schema and structured answers |
+
+### Schema Optimization
+
+Generate and optimize Schema.org markup for better machine readability:
+
+#### Single Schema Generation
+
+```bash
+POST /api/v1/geo/schema/generate
+{
+  "url": "https://example.com/products/widget",
+  "html_content": "<html>...</html>",
+  "page_type": "Product"
+}
+```
+
+Returns optimized schema with:
+- Detected page type (Article, Product, FAQPage, etc.)
+- Complete Schema.org JSON-LD
+- Implementation code ready to paste
+- Optimization recommendations
+
+#### Multiple Schema Detection
+
+For complex pages that warrant multiple schema types:
+
+```bash
+POST /api/v1/geo/schema/multiple
+{
+  "url": "https://example.com/page",
+  "html_content": "<html>...</html>"
+}
+```
+
+Returns multiple schema suggestions:
+- **High priority**: Product, Article, FAQPage
+- **Medium priority**: Organization, BreadcrumbList
+- Each with implementation code and reasoning
+
+<Warning>
+Always validate generated schema in [Google's Rich Results Test](https://search.google.com/test/rich-results) before publishing to production.
+</Warning>
+
+### Content Templates
+
+Pre-built templates optimized for GEO:
+
+#### Available Templates
+
+1. **Guide Template** (`guide`)
+   - Long-form educational content
+   - Step-by-step structure
+   - Citation-ready sections
+   - Authority building
+
+2. **Comparison Template** (`comparison`)
+   - Product/service comparisons
+   - Feature tables
+   - Pros/cons analysis
+   - Decision frameworks
+
+3. **FAQ Template** (`faq`)
+   - Question-answer format
+   - FAQ schema ready
+   - Direct answer blocks
+   - Related questions
+
+4. **Listicle Template** (`listicle`)
+   - Numbered or bulleted lists
+   - Scannable format
+   - Summary sections
+   - Quick takeaways
+
+5. **Tutorial Template** (`tutorial`)
+   - How-to content
+   - Process documentation
+   - Visual aids support
+   - Expected outcomes
+
+#### Generate Custom Template
+
+```bash
+POST /api/v1/geo/content-templates/generate
+{
+  "template_type": "guide",
+  "topic": "Email Marketing Automation",
+  "keywords": ["email automation", "drip campaigns", "lead nurturing"]
+}
+```
+
+Returns:
+- Content structure outline
+- Section recommendations
+- GEO optimization tips
+- Schema suggestions
+- Citation strategies
+
+### Content Analysis
+
+Analyze existing content for GEO readiness:
+
+```bash
+POST /api/v1/geo/analyze-content
+{
+  "content": "Your article content here..."
+}
+```
+
+**Analysis Results:**
+
+```json
+{
+  "score": 75,
+  "geo_readiness": "Moderate readiness; prioritize structured upgrades",
+  "strengths": [
+    "Clear answer blocks for common questions",
+    "External citations to authoritative sources",
+    "Structured headings and subheadings"
+  ],
+  "weaknesses": [
+    "Missing FAQ schema markup",
+    "Author credentials not prominently displayed",
+    "No product/service schema",
+    "Limited use of data and statistics"
+  ],
+  "recommendations": [
+    "Add FAQ schema for Q&A sections",
+    "Include author bio with expertise credentials",
+    "Add Product schema if reviewing products",
+    "Cite more authoritative sources with links"
+  ]
+}
+```
+
+**GEO Readiness Levels:**
+- **80-100**: Strong citation readiness
+- **60-79**: Moderate readiness; prioritize structured upgrades
+- **0-59**: Low readiness; major GEO structure and evidence gaps
+
+## User Workflows
+
+### Workflow 1: Initial GEO Assessment
+
+1. **Run Audit**: Create audit for your domain
+2. **Start Citation Tracking**: Begin monitoring brand mentions
+3. **Discover Queries**: Find citation opportunities
+4. **Analyze Competitors**: See who's winning in LLMs
+5. **Review Recommendations**: Get actionable GEO improvements
+
+### Workflow 2: Content Optimization
+
+1. **Analyze Existing Content**: Upload content for GEO scoring
+2. **Review Weaknesses**: Identify schema and structure gaps
+3. **Generate Schema**: Create optimized markup
+4. **Implement Changes**: Add schema and improve structure
+5. **Track Results**: Monitor citation rate improvements
+
+### Workflow 3: New Content Creation
+
+1. **Discover Queries**: Find high-opportunity topics
+2. **Select Template**: Choose appropriate content type
+3. **Generate Outline**: Use AI-powered template generation
+4. **Create Content**: Follow GEO-optimized structure
+5. **Add Schema**: Implement recommended markup
+6. **Track Citations**: Monitor performance
+
+### Workflow 4: Competitive Analysis
+
+1. **Run Competitor Analysis**: Compare citations
+2. **Identify Gaps**: See where competitors win
+3. **Review Opportunities**: Get strategic recommendations
+4. **Prioritize Actions**: Focus on high-impact improvements
+5. **Monitor Progress**: Track citation rate changes
+
+## Commerce-Focused GEO
+
+For e-commerce sites, LatentGEO provides specialized tools:
+
+### Query Analyzer
+
+Analyze individual commerce queries to understand competitive positioning:
+
+```bash
+POST /api/v1/geo/commerce-query/analyze
+{
+  "audit_id": 123,
+  "query": "best wireless headphones under $100",
+  "market": "US",
+  "top_k": 10,
+  "language": "en"
+}
+```
+
+**Returns:**
+- Your position vs competitors in LLM results
+- Why you're not #1 (if applicable)
+- Disadvantages vs top result
+- Action plan to improve ranking
+- Evidence and data supporting recommendations
+
+### Campaign Generator
+
+Generate comprehensive e-commerce GEO campaigns:
+
+```bash
+POST /api/v1/geo/commerce-campaign/generate
+{
+  "audit_id": 123,
+  "competitor_domains": ["competitor1.com", "competitor2.com"],
+  "market": "US",
+  "channels": ["chatgpt", "perplexity", "google-ai"],
+  "objective": "Increase citation share for product category",
+  "use_ai_playbook": true
+}
+```
+
+Generates:
+- Channel-specific strategies
+- Content recommendations
+- Schema implementation plan
+- Citation optimization tactics
+- Timeline and priorities
+
+<Info>
+Commerce campaigns use Kimi 2.5 with web search capabilities to analyze real-time competitive positioning in AI results.
+</Info>
+
+## API Endpoints
+
+### Citation Tracking
+
+```bash
+# Start tracking
+POST /api/v1/geo/citation-tracking/start
+
+# Get history (30 days)
+GET /api/v1/geo/citation-tracking/history/{audit_id}?days=30
+
+# Recent citations
+GET /api/v1/geo/citation-tracking/recent/{audit_id}?limit=10
+```
+
+### Query Discovery
+
+```bash
+# Discover queries
+POST /api/v1/geo/query-discovery/discover
+
+# Get opportunities
+GET /api/v1/geo/query-discovery/opportunities/{audit_id}?limit=10
+```
+
+### Competitor Analysis
+
+```bash
+# Analyze competitors
+POST /api/v1/geo/competitor-analysis/analyze
+
+# Get benchmark
+GET /api/v1/geo/competitor-analysis/benchmark/{audit_id}
+```
+
+### Schema Generation
+
+```bash
+# Single schema
+POST /api/v1/geo/schema/generate
+
+# Multiple schemas
+POST /api/v1/geo/schema/multiple
+```
+
+### Content Templates
+
+```bash
+# List templates
+GET /api/v1/geo/content-templates/list
+
+# Generate template
+POST /api/v1/geo/content-templates/generate
+
+# Analyze content
+POST /api/v1/geo/content-templates/analyze
+```
+
+### GEO Dashboard
+
+```bash
+# Get complete GEO overview
+GET /api/v1/geo/dashboard/{audit_id}
+```
+
+Returns consolidated view:
+- Citation tracking summary
+- Top query opportunities
+- Competitor benchmark
+- Commerce campaign status
+- Article engine status
+
+## Best Practices
+
+### Content Structure
+
+✓ Use clear, semantic HTML headings  
+✓ Create answer-ready content blocks  
+✓ Include FAQ sections with schema  
+✓ Add author credentials and bios  
+✓ Cite authoritative external sources  
+✓ Use data and statistics  
+✓ Structure lists and comparisons clearly  
+
+### Schema Implementation
+
+✓ Prioritize Product, Article, FAQPage, Organization  
+✓ Always validate before deploying  
+✓ Keep schema updated with content changes  
+✓ Use multiple schemas when appropriate  
+✓ Include complete, accurate data  
+
+### Authority Building
+
+✓ Display author expertise prominently  
+✓ Link to credible external sources  
+✓ Include original research and data  
+✓ Show credentials and certifications  
+✓ Build topical authority in your niche  
+
+### Monitoring
+
+✓ Track citation rate weekly  
+✓ Monitor competitor performance  
+✓ Test content changes impact  
+✓ Review query opportunities monthly  
+✓ Update schema as needed  
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="AI Content Generation" icon="wand-magic-sparkles" href="/features/ai-content-generation">
+    Generate GEO-optimized articles automatically
+  </Card>
+  <Card title="Analytics" icon="chart-line" href="/features/analytics">
+    Track your GEO performance metrics
+  </Card>
+  <Card title="Audits" icon="magnifying-glass" href="/features/audits">
+    Run comprehensive GEO audits
+  </Card>
+  <Card title="Real-time Monitoring" icon="signal-stream" href="/features/real-time-monitoring">
+    Monitor audit progress in real-time
+  </Card>
+</CardGroup>
