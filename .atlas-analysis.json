@@ -1,0 +1,158 @@
+{
+  "projectType": "saas",
+  "projectName": "LatentGEO",
+  "projectDescription": "Full-stack platform for SEO/GEO audits with AI-powered content optimization and real-time analytics.",
+  "theme": "aspen",
+  "primaryColor": "#0EA5E9",
+  "lightColor": "#38BDF8",
+  "darkColor": "#0284C7",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "environment-setup"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/audits",
+              "features/geo-optimization",
+              "features/real-time-monitoring",
+              "features/ai-content-generation",
+              "features/analytics"
+            ]
+          },
+          {
+            "group": "Integrations",
+            "pages": [
+              "integrations/github",
+              "integrations/hubspot",
+              "integrations/webhooks"
+            ]
+          },
+          {
+            "group": "Architecture",
+            "pages": [
+              "architecture/overview",
+              "architecture/backend",
+              "architecture/frontend",
+              "architecture/real-time"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/docker",
+              "deployment/aws",
+              "deployment/supabase-migration"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api/overview",
+              "api/authentication",
+              "api/errors"
+            ]
+          },
+          {
+            "group": "Endpoints",
+            "pages": [
+              "api/audits",
+              "api/reports",
+              "api/analytics",
+              "api/geo",
+              "api/github",
+              "api/hubspot",
+              "api/sse",
+              "api/webhooks"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "api/backlinks",
+              "api/keywords",
+              "api/rank-tracking",
+              "api/llm-visibility",
+              "api/pagespeed"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Development",
+        "groups": [
+          {
+            "group": "Setup",
+            "pages": [
+              "development/local-setup",
+              "development/testing",
+              "development/contributing"
+            ]
+          },
+          {
+            "group": "Services",
+            "pages": [
+              "development/backend-services",
+              "development/frontend-components",
+              "development/celery-workers"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Comprehensive SEO/GEO audits with AI-powered insights",
+    "Real-time progress monitoring via Server-Sent Events (SSE)",
+    "GitHub and HubSpot integrations for content management",
+    "Multi-LLM visibility tracking (ChatGPT, Gemini, Perplexity)",
+    "PageSpeed and Core Web Vitals analysis",
+    "Competitor analysis and backlink tracking",
+    "AI-powered content generation and optimization",
+    "Rank tracking and keyword research",
+    "PDF report generation",
+    "Webhook-based external integrations"
+  ],
+  "publicApiSurface": [
+    "POST /api/v1/audits/ - Create new audit",
+    "GET /api/v1/audits/{audit_id} - Get audit details",
+    "GET /api/v1/audits/{audit_id}/summary - Get audit summary",
+    "POST /api/v1/audits/{audit_id}/generate-pdf - Generate PDF report",
+    "GET /api/v1/reports/audit/{audit_id} - Get audit reports",
+    "GET /api/v1/analytics/audit/{audit_id} - Get analytics data",
+    "GET /api/v1/sse/audits/{audit_id}/progress - Real-time progress updates",
+    "GET /api/v1/geo/content-templates - Get GEO content templates",
+    "POST /api/v1/geo/generate-article - Generate AI-powered article",
+    "POST /api/v1/geo/citation-tracking - Track citations in LLMs",
+    "GET /api/v1/github/auth-url - Get GitHub OAuth URL",
+    "POST /api/v1/github/callback - GitHub OAuth callback",
+    "GET /api/v1/github/connections - List GitHub connections",
+    "POST /api/v1/github/audit-blogs/{connection_id}/{repo_id} - Audit blog content",
+    "GET /api/v1/hubspot/auth-url - Get HubSpot OAuth URL",
+    "POST /api/v1/hubspot/callback - HubSpot OAuth callback",
+    "GET /api/v1/hubspot/connections - List HubSpot connections",
+    "POST /api/v1/hubspot/sync/{connection_id} - Sync HubSpot pages",
+    "POST /api/v1/webhooks/github/incoming - GitHub webhook handler",
+    "POST /api/v1/webhooks/hubspot/incoming - HubSpot webhook handler",
+    "GET /api/v1/backlinks/check - Check backlinks for URL",
+    "GET /api/v1/keywords/suggestions - Get keyword suggestions",
+    "POST /api/v1/rank-tracking/track - Track keyword rankings",
+    "POST /api/v1/llm-visibility/check - Check LLM visibility",
+    "POST /api/v1/pagespeed/analyze - Analyze PageSpeed metrics",
+    "GET /health - Health check endpoint"
+  ]
+}
