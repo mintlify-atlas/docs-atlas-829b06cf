@@ -99,7 +99,11 @@
               "api/keywords",
               "api/rank-tracking",
               "api/llm-visibility",
-              "api/pagespeed"
+              "api/pagespeed",
+              "api/search",
+              "api/ai-content",
+              "api/content-editor",
+              "api/content-analysis"
             ]
           }
         ]

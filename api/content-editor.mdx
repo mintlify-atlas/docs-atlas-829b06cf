@@ -1,0 +1,194 @@
+---
+title: Content Editor API
+description: Analyze and optimize content for target keywords
+---
+
+The Content Editor API provides AI-powered content analysis and optimization suggestions.
+
+## Analyze Content
+
+<Note>
+  This endpoint requires authentication.
+</Note>
+
+### `POST /api/v1/tools/content-editor/analyze`
+
+Analyze content text for a target keyword and receive optimization recommendations.
+
+<ParamField body="text" type="string" required>
+  The content text to analyze (HTML or plain text)
+</ParamField>
+
+<ParamField body="keyword" type="string" required>
+  The target keyword to optimize for
+</ParamField>
+
+#### Response
+
+<ResponseField name="score" type="integer">
+  Overall optimization score (0-100)
+</ResponseField>
+
+<ResponseField name="summary" type="string">
+  Brief summary of the analysis results
+</ResponseField>
+
+<ResponseField name="pillars" type="object">
+  Detailed scoring across key optimization pillars
+  
+  <Expandable title="pillars structure">
+    <ResponseField name="keyword_usage" type="object">
+      Keyword density and placement analysis
+    </ResponseField>
+    
+    <ResponseField name="readability" type="object">
+      Content readability metrics
+    </ResponseField>
+    
+    <ResponseField name="structure" type="object">
+      Content structure and heading analysis
+    </ResponseField>
+    
+    <ResponseField name="entities" type="object">
+      Entity recognition and topic coverage
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="suggestions" type="array">
+  List of actionable optimization suggestions
+  
+  <Expandable title="suggestion object">
+    <ResponseField name="type" type="string">
+      Suggestion category (e.g., "keyword", "structure", "readability")
+    </ResponseField>
+    
+    <ResponseField name="message" type="string">
+      Human-readable suggestion text
+    </ResponseField>
+    
+    <ResponseField name="priority" type="string">
+      Importance level ("high", "medium", "low")
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="missing_entities" type="array">
+  List of important entities or topics missing from the content
+</ResponseField>
+
+#### Example Request
+
+```bash
+curl -X POST https://api.example.com/api/v1/tools/content-editor/analyze \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "<h1>SEO Best Practices</h1><p>Search engine optimization is crucial for online visibility...</p>",
+    "keyword": "SEO best practices"
+  }'
+```
+
+#### Example Response
+
+```json
+{
+  "score": 78,
+  "summary": "Good keyword usage and structure. Consider improving readability and adding related entities.",
+  "pillars": {
+    "keyword_usage": {
+      "score": 85,
+      "density": 2.3,
+      "in_title": true,
+      "in_headings": 2
+    },
+    "readability": {
+      "score": 72,
+      "avg_sentence_length": 18,
+      "complex_words": 12
+    },
+    "structure": {
+      "score": 80,
+      "h1_count": 1,
+      "h2_count": 4,
+      "paragraph_count": 8
+    },
+    "entities": {
+      "score": 65,
+      "found": 8,
+      "expected": 12
+    }
+  },
+  "suggestions": [
+    {
+      "type": "keyword",
+      "message": "Add target keyword to the first paragraph",
+      "priority": "high"
+    },
+    {
+      "type": "readability",
+      "message": "Break down long sentences for better readability",
+      "priority": "medium"
+    },
+    {
+      "type": "structure",
+      "message": "Add more H2 headings to improve content structure",
+      "priority": "medium"
+    }
+  ],
+  "missing_entities": [
+    "meta tags",
+    "backlinks",
+    "page speed",
+    "mobile optimization"
+  ]
+}
+```
+
+## Use Cases
+
+### Real-time Content Optimization
+
+Use this endpoint in a content editor UI to provide real-time feedback as users write:
+
+```javascript
+// Debounced analysis on content change
+const analyzeContent = async (text, keyword) => {
+  const response = await fetch('/api/v1/tools/content-editor/analyze', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ text, keyword })
+  });
+  return response.json();
+};
+```
+
+### Bulk Content Audit
+
+Analyze multiple pages to identify optimization opportunities across your site.
+
+## Error Codes
+
+| Code | Description |
+|------|-------------|
+| 401 | Missing or invalid authentication token |
+| 422 | Invalid request (missing text or keyword) |
+| 500 | Internal server error during analysis |
+
+<Info>
+  The Content Editor API uses AI-powered natural language processing to analyze content quality and provide optimization suggestions.
+</Info>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Content Analysis" icon="magnifying-glass" href="/api/content-analysis">
+    Advanced content analysis tools
+  </Card>
+  <Card title="Keywords API" icon="key" href="/api/keywords">
+    Keyword research and suggestions
+  </Card>
+</CardGroup>

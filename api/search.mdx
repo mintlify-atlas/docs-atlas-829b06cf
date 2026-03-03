@@ -1,0 +1,99 @@
+---
+title: Search API
+description: AI-powered search that can automatically trigger audits
+---
+
+The Search API provides AI-powered search functionality that can detect URLs in queries and automatically trigger SEO audits.
+
+## Search and Auto-Audit
+
+<Note>
+  This endpoint requires authentication. Include a valid JWT bearer token in the Authorization header.
+</Note>
+
+### `POST /api/v1/search`
+
+Process a search query and optionally trigger an audit if a URL is detected.
+
+<ParamField body="query" type="string" required>
+  The search query. If a URL is detected, an audit will be automatically started.
+</ParamField>
+
+#### Response
+
+<ResponseField name="response" type="string">
+  AI-generated response to the query
+</ResponseField>
+
+<ResponseField name="suggestions" type="array">
+  List of suggested actions or follow-up queries
+</ResponseField>
+
+<ResponseField name="audit_id" type="integer" optional>
+  ID of the automatically created audit (if a URL was detected)
+</ResponseField>
+
+<ResponseField name="audit_started" type="boolean">
+  Whether an audit was automatically triggered
+</ResponseField>
+
+#### Example Request
+
+```bash
+curl -X POST https://api.example.com/api/v1/search \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "Analyze https://example.com for SEO issues"
+  }'
+```
+
+#### Example Response
+
+```json
+{
+  "response": "I've detected a URL in your query and started an SEO audit for https://example.com",
+  "suggestions": [
+    "View audit progress",
+    "Configure audit settings",
+    "Check previous audits for this domain"
+  ],
+  "audit_id": 123,
+  "audit_started": true
+}
+```
+
+## Auto-Audit Behavior
+
+When a URL is detected in the search query:
+
+1. **URL Extraction**: The system uses regex to extract valid HTTP/HTTPS URLs
+2. **Audit Creation**: Automatically creates an audit with default settings:
+   - `max_crawl`: 30 pages
+   - `max_audit`: 3 pages (detailed analysis)
+3. **Background Processing**: The audit runs asynchronously via Celery worker
+4. **User Association**: The audit is linked to the authenticated user
+
+<Info>
+  Monitor audit progress using the [SSE endpoint](/api/sse) or polling the audit status endpoint.
+</Info>
+
+## Error Codes
+
+| Code | Description |
+|------|-------------|
+| 401 | Missing or invalid authentication token |
+| 422 | Invalid request format |
+| 500 | Internal server error |
+| 503 | Celery worker unavailable (falls back to sync mode in debug) |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Audit API" icon="chart-line" href="/api/audits">
+    View and manage created audits
+  </Card>
+  <Card title="SSE API" icon="bolt" href="/api/sse">
+    Monitor audit progress in real-time
+  </Card>
+</CardGroup>

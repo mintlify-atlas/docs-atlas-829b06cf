@@ -1,0 +1,214 @@
+---
+title: Content Analysis API
+description: Advanced content analysis tools for duplicate detection and keyword extraction
+---
+
+The Content Analysis API provides tools for finding duplicate content, extracting keywords, and analyzing keyword gaps.
+
+## Find Duplicate Content
+
+<Note>
+  This endpoint requires authentication.
+</Note>
+
+### `POST /api/v1/content/duplicates`
+
+Detect duplicate or near-duplicate content across multiple pages.
+
+<ParamField body="pages" type="array" required>
+  Array of page objects to analyze for duplicates
+</ParamField>
+
+<ParamField query="threshold" type="number" default="0.85">
+  Similarity threshold (0.0 to 1.0). Higher values require closer matches.
+</ParamField>
+
+#### Example Request
+
+```bash
+curl -X POST "https://api.example.com/api/v1/content/duplicates?threshold=0.85" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "pages": [
+      {"url": "https://example.com/page1", "content": "..."},
+      {"url": "https://example.com/page2", "content": "..."}
+    ]
+  }'
+```
+
+#### Example Response
+
+```json
+{
+  "duplicates": [
+    {
+      "url1": "https://example.com/page1",
+      "url2": "https://example.com/page2",
+      "similarity": 0.92,
+      "type": "high"
+    }
+  ]
+}
+```
+
+## Extract Keywords
+
+### `POST /api/v1/content/keywords/extract`
+
+Extract the most important keywords from HTML content.
+
+<ParamField body="html" type="string" required>
+  HTML content to extract keywords from (can be passed in body or query)
+</ParamField>
+
+<ParamField query="top_n" type="integer" default="50">
+  Number of top keywords to return (1-200)
+</ParamField>
+
+#### Example Request
+
+```bash
+curl -X POST "https://api.example.com/api/v1/content/keywords/extract?top_n=20" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "html": "<h1>SEO Guide</h1><p>Learn about search engine optimization...</p>"
+  }'
+```
+
+#### Example Response
+
+```json
+{
+  "keywords": [
+    {"keyword": "SEO", "score": 0.95, "frequency": 12},
+    {"keyword": "search engine optimization", "score": 0.88, "frequency": 5},
+    {"keyword": "ranking", "score": 0.76, "frequency": 8}
+  ]
+}
+```
+
+## Analyze Keyword Gap
+
+### `POST /api/v1/content/keywords/gap`
+
+Identify keyword opportunities by comparing your keywords against competitors.
+
+<ParamField body="your_keywords" type="array" required>
+  Array of your keyword objects with scores
+</ParamField>
+
+<ParamField body="competitor_keywords" type="array" required>
+  Array of competitor keyword objects with scores
+</ParamField>
+
+#### Example Request
+
+```bash
+curl -X POST https://api.example.com/api/v1/content/keywords/gap \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "your_keywords": [
+      {"keyword": "SEO", "score": 0.8}
+    ],
+    "competitor_keywords": [
+      {"keyword": "SEO", "score": 0.9},
+      {"keyword": "link building", "score": 0.85}
+    ]
+  }'
+```
+
+#### Example Response
+
+```json
+{
+  "gaps": [
+    {
+      "keyword": "link building",
+      "competitor_score": 0.85,
+      "your_score": 0,
+      "opportunity": "high"
+    }
+  ],
+  "shared": [
+    {
+      "keyword": "SEO",
+      "your_score": 0.8,
+      "competitor_score": 0.9,
+      "gap": 0.1
+    }
+  ]
+}
+```
+
+## Compare Keywords Between URLs
+
+### `GET /api/v1/content/keywords/compare`
+
+Directly compare keywords between two URLs by crawling and analyzing them.
+
+<ParamField query="your_url" type="string" required>
+  Your URL to analyze
+</ParamField>
+
+<ParamField query="competitor_url" type="string" required>
+  Competitor URL to compare against
+</ParamField>
+
+#### Example Request
+
+```bash
+curl -X GET "https://api.example.com/api/v1/content/keywords/compare?your_url=https://example.com&competitor_url=https://competitor.com" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+<Warning>
+  The compare endpoint crawls external URLs, which may take several seconds. Ensure both URLs are publicly accessible.
+</Warning>
+
+## Error Codes
+
+| Code | Description |
+|------|-------------|
+| 401 | Missing or invalid authentication token |
+| 422 | Invalid parameters (e.g., top_n out of range, missing html) |
+| 500 | Internal server error |
+
+## Use Cases
+
+### Content Audit
+
+1. **Duplicate Detection**: Find and consolidate duplicate content to avoid SEO penalties
+2. **Keyword Extraction**: Identify the main topics and keywords on each page
+3. **Gap Analysis**: Discover keyword opportunities by comparing with competitors
+
+### SEO Optimization
+
+```javascript
+// Example workflow
+const optimizeContent = async (pages) => {
+  // 1. Find duplicates
+  const duplicates = await findDuplicates(pages);
+  
+  // 2. Extract keywords from top pages
+  const keywords = await extractKeywords(pages[0].html);
+  
+  // 3. Compare with competitors
+  const gaps = await analyzeKeywordGap(keywords, competitorKeywords);
+  
+  return { duplicates, keywords, gaps };
+};
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Content Editor" icon="pen" href="/api/content-editor">
+    Optimize content for target keywords
+  </Card>
+  <Card title="Keywords API" icon="key" href="/api/keywords">
+    Keyword research and suggestions
+  </Card>
+</CardGroup>
